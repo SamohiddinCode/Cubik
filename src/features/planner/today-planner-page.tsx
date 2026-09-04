@@ -28,10 +28,10 @@ import {
   UsersRound,
   WalletCards,
 } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { CubikMark } from "@/components/cubik-mark";
 import styles from "@/app/app/today/today.module.css";
-import { PlannerView, taskLists } from "./model";
+import { localDateKey, PlannerView, Task, taskLists } from "./model";
 import { usePlanner } from "./use-planner";
 import { TaskList } from "./components/task-list";
 import { TaskInspector } from "./components/task-inspector";
@@ -67,6 +67,10 @@ const viewLabels: Record<PlannerView, string> = {
   all: "Все задачи",
 };
 
+const scheduleStartMinutes = 9 * 60;
+const scheduleEndMinutes = 19 * 60;
+const pixelsPerHour = 55;
+
 function formatDayLabel(date = new Date()) {
   const value = new Intl.DateTimeFormat("ru-RU", {
     weekday: "long",
@@ -91,6 +95,26 @@ function greetingForHour(hour: number) {
   return "Добрый вечер";
 }
 
+function timeToMinutes(value: string | null) {
+  if (!value) return null;
+  const [hours, minutes] = value.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function taskDurationMinutes(task: Task) {
+  const start = timeToMinutes(task.startTime);
+  const end = timeToMinutes(task.endTime);
+  if (start !== null && end !== null && end > start) return end - start;
+  return task.durationMinutes ?? 30;
+}
+
+function eventTone(priority: Task["priority"]) {
+  if (priority === "P1") return styles.presentationEvent;
+  if (priority === "P2") return styles.focusEvent;
+  return styles.meetingEvent;
+}
+
 export function TodayPlannerPage() {
   const planner = usePlanner();
   const [newTask, setNewTask] = useState("");
@@ -98,6 +122,7 @@ export function TodayPlannerPage() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [activeListId, setActiveListId] = useState<string | null>(null);
+  const newTaskRef = useRef<HTMLInputElement>(null);
 
   const activeList = taskLists.find((list) => list.id === activeListId) ?? null;
   const visibleTasks = activeListId
@@ -112,6 +137,38 @@ export function TodayPlannerPage() {
     { label: "Все задачи", Icon: ListTodo, view: "all" },
     { label: "Входящие", Icon: Inbox, view: "inbox", count: planner.summary.inbox },
   ];
+
+  const today = localDateKey();
+  const scheduledTasks = planner.tasks.filter((task) => {
+    const start = timeToMinutes(task.startTime);
+    return task.dueDate === today && !task.done && start !== null && start >= scheduleStartMinutes && start < scheduleEndMinutes;
+  });
+
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nowTop = ((nowMinutes - scheduleStartMinutes) / 60) * pixelsPerHour;
+  const showNow = nowMinutes >= scheduleStartMinutes && nowMinutes <= scheduleEndMinutes;
+
+  useEffect(() => {
+    function handleKeyboard(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isTyping = target?.matches("input, textarea, select, [contenteditable='true']") ?? false;
+
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+        setAccountOpen(false);
+        return;
+      }
+
+      if (!isTyping && !event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        newTaskRef.current?.focus();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
+  }, []);
 
   function selectView(view: PlannerView) {
     planner.setView(view);
@@ -144,7 +201,7 @@ export function TodayPlannerPage() {
           ))}
         </nav>
         <div className={styles.railBottom}>
-          <button aria-label="Настройки" title="Настройки"><Settings size={21} /></button>
+          <button aria-label="Настройки" title="Настройки" disabled><Settings size={21} /></button>
           <button aria-label={plannerOpen ? "Свернуть меню" : "Развернуть меню"} onClick={() => setPlannerOpen((value) => !value)}>
             {plannerOpen ? <ChevronLeft size={21} /> : <ChevronRight size={21} />}
           </button>
@@ -229,7 +286,7 @@ export function TodayPlannerPage() {
                 </div>
               )}
               <form className={styles.quickAdd} onSubmit={addTask}>
-                <Plus size={19} /><input aria-label="Новая задача" placeholder={`Добавить задачу в «${pageTitle}»`} value={newTask} onChange={(event) => setNewTask(event.target.value)} /><kbd>N</kbd>
+                <Plus size={19} /><input ref={newTaskRef} aria-label="Новая задача" placeholder={`Добавить задачу в «${pageTitle}»`} value={newTask} onChange={(event) => setNewTask(event.target.value)} /><kbd>N</kbd>
               </form>
               <TaskList tasks={visibleTasks} selectedId={planner.selectedId} onSelect={planner.setSelectedId} onToggle={planner.toggleTask} />
               <button className={styles.laterButton} onClick={() => selectView("all")}><ChevronDown size={17} /><span>Все задачи</span><em>{planner.tasks.length}</em></button>
@@ -237,13 +294,28 @@ export function TodayPlannerPage() {
           </section>
 
           <aside className={styles.schedule}>
-            <header><h3>Расписание</h3><button aria-label="Календарь" disabled><CalendarDays size={18} /></button></header>
+            <header><h3>Расписание сегодня</h3><button aria-label="Календарь" disabled title="Полный календарь — следующий этап"><CalendarDays size={18} /></button></header>
             <div className={styles.timeline}>
               {["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"].map((time) => <div className={styles.hour} key={time}><span>{time}</span><i /></div>)}
-              <div className={`${styles.event} ${styles.meetingEvent}`}><strong>Командная встреча</strong><span>09:30–10:30</span></div>
-              <div className={`${styles.event} ${styles.presentationEvent}`}><strong>Презентация</strong><span>10:00–11:30</span></div>
-              <div className={`${styles.event} ${styles.focusEvent}`}><strong>Глубокая работа</strong><span>13:00–15:00</span></div>
-              <div className={styles.nowLine}><span>{new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date())}</span><i /></div>
+              {scheduledTasks.map((task) => {
+                const start = timeToMinutes(task.startTime) ?? scheduleStartMinutes;
+                const top = ((start - scheduleStartMinutes) / 60) * pixelsPerHour;
+                const height = Math.max(32, (taskDurationMinutes(task) / 60) * pixelsPerHour);
+                return (
+                  <button
+                    aria-label={`Открыть задачу ${task.title}`}
+                    className={`${styles.event} ${eventTone(task.priority)}`}
+                    key={task.id}
+                    onClick={() => planner.setSelectedId(task.id)}
+                    style={{ top, height, borderTop: 0, borderRight: 0, borderBottom: 0, textAlign: "left" }}
+                    type="button"
+                  >
+                    <strong>{task.title}</strong>
+                    <span>{task.startTime}{task.endTime ? `–${task.endTime}` : ` · ${formatDuration(taskDurationMinutes(task))}`}</span>
+                  </button>
+                );
+              })}
+              {showNow && <div className={styles.nowLine} style={{ top: nowTop }}><span>{new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hour12: false }).format(now)}</span><i /></div>}
             </div>
             <footer><span>Запланировано</span><strong>{formatDuration(planner.summary.totalMinutes)}</strong></footer>
           </aside>
