@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import {
   CalendarDays,
   Check,
@@ -61,7 +61,11 @@ function createDraft(task: Task): Draft {
   };
 }
 
-export function TaskInspector({
+export function TaskInspector(props: TaskInspectorProps) {
+  return <TaskInspectorEditor key={props.task.id} {...props} />;
+}
+
+function TaskInspectorEditor({
   task,
   onClose,
   onToggle,
@@ -73,12 +77,6 @@ export function TaskInspector({
 }: TaskInspectorProps) {
   const [draft, setDraft] = useState<Draft>(() => createDraft(task));
   const [subtaskTitle, setSubtaskTitle] = useState("");
-
-  useEffect(() => {
-    setDraft(createDraft(task));
-    setSubtaskTitle("");
-  }, [task.id]);
-
   const completedSubtasks = task.subtasks.filter((subtask) => subtask.done).length;
 
   function save(event: FormEvent) {
