@@ -66,3 +66,12 @@ jobs:
           path: /tmp/cubik-runtime.tgz
           compression-level: 0
           retention-days: 1
+
+      - name: Verify public static deploy
+        if: github.ref == 'refs/heads/codex/local-runtime-artifact'
+        run: |
+          set -euxo pipefail
+          curl --fail --location --silent --show-error --retry 5 --retry-delay 3 --output /tmp/root.html --write-out 'root=%{http_code}\n' https://cubik-static.onrender.com/
+          curl --fail --location --silent --show-error --retry 5 --retry-delay 3 --output /tmp/today.html --write-out 'today=%{http_code}\n' https://cubik-static.onrender.com/app/today/
+          grep -q '<html' /tmp/root.html
+          grep -q '<html' /tmp/today.html
