@@ -380,7 +380,6 @@ export function TodayPlannerPage() {
             </div>
           </div>
 
-          <div className={styles.toolDivider} />
           {disabledPlannerNav.map(({ label, Icon }) => (
             <button className={styles.toolButton} disabled key={label} title={`${label} — следующий этап Planner`}>
               <Icon size={19} strokeWidth={1.8} /><span>{label}</span>

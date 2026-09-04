@@ -58,16 +58,16 @@
 .plannerHeading button, .listHeading button { background: transparent; border: 0; border-radius: 8px; color: var(--muted); display: grid; height: 30px; place-items: center; width: 30px; }
 .plannerHeading button:hover, .listHeading button:hover { background: #eaf0f8; }
 .plannerTools { display: grid; flex: none; gap: 4px; min-height: 0; overflow: visible; padding: 0 2px 8px; }
-.toolButton { align-items: center; background: transparent; border: 0; border-radius: 12px; color: #354158; display: grid; font-size: 13px; gap: 12px; grid-template-columns: 20px 1fr auto; min-height: 44px; padding: 0 11px; text-align: left; width: 100%; }
+.toolButton { align-items: center; background: transparent; border: 0; border-radius: 12px; color: #354158; display: grid; font-size: 13px; gap: 12px; grid-template-columns: 20px 1fr auto; min-height: 44px; outline: none; padding: 0 11px; text-align: left; width: 100%; }
 .toolButton:hover:not(:disabled) { background: #edf3fa; }
 .toolButton:disabled { color: #778397; cursor: not-allowed; opacity: .62; }
-.toolButton.toolActive { background: #e8f0fb; box-shadow: inset 3px 0 0 #2865df; color: #174dbf; font-weight: 750; }
+.toolButton.toolActive { background: #eef3f8; box-shadow: inset 2px 0 0 #7695c2; color: #315982; font-weight: 750; }
+.toolButton:focus-visible { box-shadow: 0 0 0 2px rgba(73,111,166,.2), inset 2px 0 0 #7695c2; }
 .taskTree { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .22s ease, opacity .16s ease; }
 .taskTreeOpen { grid-template-rows: 1fr; opacity: 1; }
 .taskTreeInner { min-height: 0; overflow: hidden; padding: 9px 0 14px 9px; }
 .treeHeading { color: #8a96a8; font-size: 9px; font-weight: 800; letter-spacing: .1em; padding: 3px 10px 7px; }
 .treeDivider { background: var(--line); height: 1px; margin: 12px 9px; }
-.toolDivider { background: var(--line); height: 1px; margin: 10px 9px; }
 .treeSection { align-items: center; background: transparent; border: 0; border-radius: 10px; color: #6e7b90; display: grid; font-size: 12px; gap: 10px; grid-template-columns: 17px 1fr 15px; min-height: 38px; padding: 0 10px; text-align: left; width: 100%; }
 .treeSection:hover { background: #eef3fa; color: #344158; }
 .nestedOptions { display: grid; gap: 3px; padding: 2px 0 6px 27px; }
