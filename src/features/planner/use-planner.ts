@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addDaysKey,
   createTaskId,
-  initialTasks,
   localDateKey,
   PlannerView,
   Task,
@@ -17,23 +16,24 @@ type CreateTaskOptions = {
 };
 
 export function usePlanner() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [view, setView] = useState<PlannerView>("today");
-  const [selectedId, setSelectedId] = useState<string | null>(initialTasks[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [loadWarning, setLoadWarning] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     const result = loadTasks();
     setTasks(result.tasks);
     setSelectedId(result.tasks[0]?.id ?? null);
-    setPersistenceError(result.error);
+    setLoadWarning(result.error);
     setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    setPersistenceError(saveTasks(tasks));
+    setSaveError(saveTasks(tasks));
   }, [hydrated, tasks]);
 
   const selected = useMemo(
@@ -174,7 +174,7 @@ export function usePlanner() {
     deleteTask,
     filteredTasks,
     hydrated,
-    persistenceError,
+    persistenceError: saveError ?? loadWarning,
     selected,
     selectedId,
     setSelectedId,
