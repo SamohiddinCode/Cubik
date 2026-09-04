@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - codex/local-runtime-artifact
 
 permissions:
   contents: read
@@ -48,3 +49,20 @@ jobs:
 
       - name: Production build
         run: pnpm build
+
+      - name: Prepare standalone runtime
+        if: github.ref == 'refs/heads/codex/local-runtime-artifact'
+        run: |
+          mkdir -p .next/standalone/.next
+          cp -R .next/static .next/standalone/.next/static
+          if [ -d public ]; then cp -R public .next/standalone/public; fi
+          tar -C .next/standalone -czf /tmp/cubik-runtime.tgz .
+
+      - name: Upload standalone runtime
+        if: github.ref == 'refs/heads/codex/local-runtime-artifact'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cubik-runtime
+          path: /tmp/cubik-runtime.tgz
+          compression-level: 0
+          retention-days: 1
