@@ -9,6 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  FileText,
+  Filter,
   Focus,
   GraduationCap,
   Grid2X2,
@@ -23,6 +25,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Target,
+  Tags,
   TrendingUp,
   UserRound,
   UsersRound,
@@ -135,6 +138,7 @@ export function TodayPlannerPage() {
   const planner = usePlanner();
   const [newTask, setNewTask] = useState("");
   const [plannerOpen, setPlannerOpen] = useState(true);
+  const [taskTreeOpen, setTaskTreeOpen] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [listManagerOpen, setListManagerOpen] = useState(false);
@@ -250,32 +254,60 @@ export function TodayPlannerPage() {
           <span>ПЛАННЕР</span>
           <button aria-label="Свернуть меню" onClick={() => setPlannerOpen(false)}><ChevronLeft size={18} /></button>
         </div>
-        <nav className={styles.contextNav}>
-          {plannerNav.map(({ label, Icon, view, count }) => (
-            <button className={!activeListId && planner.view === view ? styles.contextActive : ""} key={label} onClick={() => selectView(view)}>
-              <Icon size={18} strokeWidth={1.8} /><span>{label}</span>{typeof count === "number" && count > 0 && <em>{count}</em>}
+        <nav className={styles.plannerTools}>
+          <button
+            aria-expanded={taskTreeOpen}
+            className={`${styles.toolButton} ${styles.toolActive}`}
+            onClick={() => setTaskTreeOpen((value) => !value)}
+            type="button"
+          >
+            <ListTodo size={19} strokeWidth={1.9} />
+            <span>Задачи</span>
+            {taskTreeOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </button>
+
+          <div className={`${styles.taskTree} ${taskTreeOpen ? styles.taskTreeOpen : ""}`}>
+            <div className={styles.taskTreeInner}>
+              <div className={styles.treeHeading}>УМНЫЕ СПИСКИ</div>
+              <div className={styles.contextNav}>
+                {plannerNav.map(({ label, Icon, view, count }) => (
+                  <button className={!activeListId && planner.view === view ? styles.contextActive : ""} key={label} onClick={() => selectView(view)}>
+                    <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{typeof count === "number" && count > 0 && <em>{count}</em>}
+                  </button>
+                ))}
+                <button disabled title="Сводка — следующий этап Planner"><FileText size={17} strokeWidth={1.8} /><span>Сводка</span></button>
+              </div>
+
+              <div className={styles.treeDivider} />
+              <div className={styles.listHeading}>
+                <span>СПИСКИ</span>
+                <button aria-label="Управлять списками" onClick={() => setListManagerOpen(true)} title="Управлять списками"><Plus size={17} /></button>
+              </div>
+              <div className={styles.contextNav}>
+                {planner.lists.map((list) => {
+                  const Icon = listIcons[list.id as keyof typeof listIcons] ?? ListTodo;
+                  return (
+                    <button className={activeListId === list.id ? styles.contextActive : ""} key={list.id} onClick={() => selectList(list.id)}>
+                      <Icon size={17} /><span>{list.name}</span><i style={{ background: list.color }} />
+                    </button>
+                  );
+                })}
+              </div>
+              <button className={styles.newList} onClick={() => setListManagerOpen(true)}><Plus size={16} /> Управлять списками</button>
+
+              <div className={styles.treeDivider} />
+              <button className={styles.treeSection} disabled title="Фильтры — следующий этап Planner"><Filter size={16} /><span>Фильтры</span><Plus size={14} /></button>
+              <button className={styles.treeSection} disabled title="Метки — следующий этап Planner"><Tags size={16} /><span>Метки</span><Plus size={14} /></button>
+            </div>
+          </div>
+
+          <div className={styles.toolDivider} />
+          {disabledPlannerNav.map(({ label, Icon }) => (
+            <button className={styles.toolButton} disabled key={label} title={`${label} — следующий этап Planner`}>
+              <Icon size={19} strokeWidth={1.8} /><span>{label}</span>
             </button>
           ))}
-          {disabledPlannerNav.map(({ label, Icon }) => (
-            <button disabled key={label} title={`${label} — следующий этап Planner`}><Icon size={18} strokeWidth={1.8} /><span>{label}</span></button>
-          ))}
         </nav>
-        <div className={styles.navDivider} />
-        <div className={styles.listHeading}>
-          <span>СПИСКИ</span>
-          <button aria-label="Управлять списками" onClick={() => setListManagerOpen(true)} title="Управлять списками"><Plus size={17} /></button>
-        </div>
-        <nav className={styles.contextNav}>
-          {planner.lists.map((list) => {
-            const Icon = listIcons[list.id as keyof typeof listIcons] ?? ListTodo;
-            return (
-              <button className={activeListId === list.id ? styles.contextActive : ""} key={list.id} onClick={() => selectList(list.id)}>
-                <Icon size={18} /><span>{list.name}</span><i style={{ background: list.color }} />
-              </button>
-            );
-          })}
-        </nav>
-        <button className={styles.newList} onClick={() => setListManagerOpen(true)}><Plus size={17} /> Управлять списками</button>
       </aside>
 
       <button className={styles.navHandle} aria-label="Открыть меню" onClick={() => setPlannerOpen(true)}><ChevronRight size={18} /></button>
