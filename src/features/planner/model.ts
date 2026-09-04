@@ -2,6 +2,7 @@ export type TaskPriority = "P1" | "P2" | "P3";
 export type TaskRecurrence = "none" | "daily" | "weekly" | "monthly";
 export type PlannerView = "today" | "tomorrow" | "next7" | "inbox" | "all";
 export type TaskSort = "time" | "priority" | "created";
+export type TaskGroup = "none" | "list" | "priority" | "status";
 
 export type Subtask = {
   id: string;

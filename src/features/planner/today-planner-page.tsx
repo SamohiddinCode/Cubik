@@ -33,7 +33,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { CubikMark } from "@/components/cubik-mark";
 import styles from "@/app/app/today/today.module.css";
 import controls from "./planner-controls.module.css";
-import { localDateKey, PlannerView, Task, TaskSort } from "./model";
+import { localDateKey, PlannerView, Task, TaskGroup, TaskSort } from "./model";
 import { usePlanner } from "./use-planner";
 import { TaskList } from "./components/task-list";
 import { TaskInspector } from "./components/task-inspector";
@@ -74,6 +74,13 @@ const sortLabels: Record<TaskSort, string> = {
   time: "По времени",
   priority: "По приоритету",
   created: "Сначала новые",
+};
+
+const groupLabels: Record<TaskGroup, string> = {
+  none: "Без группировки",
+  list: "По списку",
+  priority: "По приоритету",
+  status: "По статусу",
 };
 
 const scheduleStartMinutes = 9 * 60;
@@ -327,13 +334,16 @@ export function TodayPlannerPage() {
                   <select className={controls.sortSelect} aria-label="Сортировка задач" value={planner.sort} onChange={(event) => planner.setSort(event.target.value as TaskSort)}>
                     {(Object.keys(sortLabels) as TaskSort[]).map((value) => <option key={value} value={value}>{sortLabels[value]}</option>)}
                   </select>
+                  <select className={controls.sortSelect} aria-label="Группировка задач" value={planner.group} onChange={(event) => planner.setGroup(event.target.value as TaskGroup)}>
+                    {(Object.keys(groupLabels) as TaskGroup[]).map((value) => <option key={value} value={value}>{groupLabels[value]}</option>)}
+                  </select>
                 </div>
               </header>
               {planner.persistenceError && <div role="status" style={{ margin: "0 16px 10px", padding: "9px 10px", borderRadius: 9, background: "#fff3e5", color: "#9a6117", fontSize: 11 }}>{planner.persistenceError}</div>}
               <form className={styles.quickAdd} onSubmit={addTask}>
                 <Plus size={19} /><input ref={newTaskRef} aria-label="Новая задача" placeholder={`Добавить задачу в «${pageTitle}»`} value={newTask} onChange={(event) => setNewTask(event.target.value)} /><kbd>N</kbd>
               </form>
-              <TaskList tasks={visibleTasks} lists={planner.lists} selectedId={planner.selectedId} onSelect={planner.setSelectedId} onToggle={planner.toggleTask} />
+              <TaskList tasks={visibleTasks} lists={planner.lists} selectedId={planner.selectedId} group={planner.group} onSelect={planner.setSelectedId} onToggle={planner.toggleTask} />
               <button className={styles.laterButton} onClick={() => selectView("all")}><ChevronDown size={17} /><span>Все задачи</span><em>{planner.tasks.length}</em></button>
             </section>
           </section>

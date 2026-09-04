@@ -11,6 +11,7 @@ import {
   Task,
   TaskList,
   TaskSort,
+  TaskGroup,
 } from "./model";
 import { loadPlanner, savePlanner } from "./storage";
 
@@ -28,6 +29,7 @@ export function usePlanner() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<TaskSort>("time");
+  const [group, setGroup] = useState<TaskGroup>("none");
   const [hydrated, setHydrated] = useState(false);
   const [loadWarning, setLoadWarning] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -257,6 +259,7 @@ export function usePlanner() {
     deleteList,
     deleteTask,
     filteredTasks,
+    group,
     hydrated,
     lists,
     persistenceError: saveError ?? loadWarning,
@@ -264,6 +267,7 @@ export function usePlanner() {
     selected,
     selectedId,
     setQuery,
+    setGroup,
     setSelectedId,
     setSort,
     setView,
