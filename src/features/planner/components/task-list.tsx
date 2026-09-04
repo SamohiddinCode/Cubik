@@ -1,3 +1,4 @@
+import { KeyboardEvent } from "react";
 import { CalendarDays, Check, Repeat2, Star } from "lucide-react";
 import styles from "@/app/app/today/today.module.css";
 import { Task, taskLists } from "../model";
@@ -10,9 +11,15 @@ type TaskListProps = {
 };
 
 export function TaskList({ tasks, selectedId, onSelect, onToggle }: TaskListProps) {
+  function selectWithKeyboard(event: KeyboardEvent<HTMLElement>, id: string) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onSelect(id);
+  }
+
   if (tasks.length === 0) {
     return (
-      <div style={{ padding: "26px 18px", color: "#718098", fontSize: 13 }}>
+      <div role="status" style={{ padding: "26px 18px", color: "#718098", fontSize: 13 }}>
         Здесь пока нет задач. Добавьте первую задачу выше.
       </div>
     );
@@ -24,9 +31,13 @@ export function TaskList({ tasks, selectedId, onSelect, onToggle }: TaskListProp
         const list = taskLists.find((item) => item.id === task.listId);
         return (
           <article
+            aria-current={task.id === selectedId ? "true" : undefined}
             className={`${styles.taskRow} ${task.id === selectedId ? styles.taskSelected : ""}`}
             key={task.id}
             onClick={() => onSelect(task.id)}
+            onKeyDown={(event) => selectWithKeyboard(event, task.id)}
+            role="button"
+            tabIndex={0}
           >
             <button
               aria-label={task.done ? "Вернуть задачу" : "Завершить задачу"}
