@@ -1,0 +1,206 @@
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field > span,
+.twoColumns label > span,
+.checkRow > span {
+  color: #6c7890;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.field input,
+.field textarea,
+.field select,
+.twoColumns input,
+.twoColumns select,
+.subtaskForm input {
+  background: #f8faff;
+  border: 1px solid #dfe6f0;
+  border-radius: 9px;
+  color: #172033;
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.field textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus,
+.twoColumns input:focus,
+.twoColumns select:focus,
+.subtaskForm input:focus {
+  border-color: #315efb;
+  box-shadow: 0 0 0 3px rgba(49, 94, 251, .09);
+}
+
+.titleInput {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+
+.twoColumns {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.twoColumns label {
+  display: grid;
+  gap: 6px;
+}
+
+.checks {
+  display: grid;
+  gap: 8px;
+}
+
+.checkRow {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.checkRow input {
+  accent-color: #315efb;
+}
+
+.actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto;
+}
+
+.save,
+.delete,
+.attachmentButton,
+.subtaskForm button {
+  align-items: center;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 7px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.save {
+  background: #315efb;
+  color: white;
+}
+
+.delete {
+  background: #fff0f1;
+  color: #c23e4b;
+}
+
+.subtaskSection,
+.attachmentSection {
+  border-top: 1px solid #e8edf4;
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.sectionHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.sectionHeader strong {
+  font-size: 12px;
+}
+
+.sectionHeader span {
+  color: #7a879b;
+  font-size: 10px;
+}
+
+.subtaskList {
+  display: grid;
+  gap: 7px;
+}
+
+.subtask {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.subtask input {
+  accent-color: #315efb;
+}
+
+.subtaskDone {
+  color: #9aa4b3;
+  text-decoration: line-through;
+}
+
+.subtaskForm {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 1fr auto;
+}
+
+.subtaskForm button {
+  background: #edf2ff;
+  color: #315efb;
+}
+
+.attachmentButton {
+  background: #f1f4f8;
+  color: #536077;
+  position: relative;
+}
+
+.attachmentButton input {
+  cursor: pointer;
+  inset: 0;
+  opacity: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.attachmentList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attachmentList span {
+  background: #f3f6fa;
+  border-radius: 7px;
+  color: #647188;
+  font-size: 10px;
+  padding: 5px 7px;
+}
+
+.note {
+  color: #8490a3;
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 0;
+}
