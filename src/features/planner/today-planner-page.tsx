@@ -27,14 +27,17 @@ import {
   UserRound,
   UsersRound,
   WalletCards,
+  X,
 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { CubikMark } from "@/components/cubik-mark";
 import styles from "@/app/app/today/today.module.css";
-import { localDateKey, PlannerView, Task, taskLists } from "./model";
+import controls from "./planner-controls.module.css";
+import { localDateKey, PlannerView, Task, TaskSort } from "./model";
 import { usePlanner } from "./use-planner";
 import { TaskList } from "./components/task-list";
 import { TaskInspector } from "./components/task-inspector";
+import { ListManager } from "./components/list-manager";
 
 const domains = [
   { label: "Planner / Time", Icon: CalendarDays, active: true },
@@ -67,11 +70,17 @@ const viewLabels: Record<PlannerView, string> = {
   all: "Все задачи",
 };
 
+const sortLabels: Record<TaskSort, string> = {
+  time: "По времени",
+  priority: "По приоритету",
+  created: "Сначала новые",
+};
+
 const scheduleStartMinutes = 9 * 60;
 const scheduleEndMinutes = 19 * 60;
 const pixelsPerHour = 55;
 
-function formatDayLabel(date = new Date()) {
+function formatDayLabel(date: Date) {
   const value = new Intl.DateTimeFormat("ru-RU", {
     weekday: "long",
     day: "numeric",
@@ -121,10 +130,13 @@ export function TodayPlannerPage() {
   const [plannerOpen, setPlannerOpen] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [listManagerOpen, setListManagerOpen] = useState(false);
   const [activeListId, setActiveListId] = useState<string | null>(null);
+  const [clock, setClock] = useState<Date | null>(null);
   const newTaskRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const activeList = taskLists.find((list) => list.id === activeListId) ?? null;
+  const activeList = planner.lists.find((list) => list.id === activeListId) ?? null;
   const visibleTasks = activeListId
     ? planner.filteredTasks.filter((task) => task.listId === activeListId)
     : planner.filteredTasks;
@@ -138,16 +150,27 @@ export function TodayPlannerPage() {
     { label: "Входящие", Icon: Inbox, view: "inbox", count: planner.summary.inbox },
   ];
 
-  const today = localDateKey();
-  const scheduledTasks = planner.tasks.filter((task) => {
-    const start = timeToMinutes(task.startTime);
-    return task.dueDate === today && !task.done && start !== null && start >= scheduleStartMinutes && start < scheduleEndMinutes;
-  });
+  const today = clock ? localDateKey(clock) : null;
+  const scheduledTasks = today
+    ? planner.tasks.filter((task) => {
+        const start = timeToMinutes(task.startTime);
+        return task.dueDate === today && !task.done && start !== null && start >= scheduleStartMinutes && start < scheduleEndMinutes;
+      })
+    : [];
 
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const nowTop = ((nowMinutes - scheduleStartMinutes) / 60) * pixelsPerHour;
-  const showNow = nowMinutes >= scheduleStartMinutes && nowMinutes <= scheduleEndMinutes;
+  const nowMinutes = clock ? clock.getHours() * 60 + clock.getMinutes() : null;
+  const nowTop = nowMinutes === null ? 0 : ((nowMinutes - scheduleStartMinutes) / 60) * pixelsPerHour;
+  const showNow = nowMinutes !== null && nowMinutes >= scheduleStartMinutes && nowMinutes <= scheduleEndMinutes;
+
+  useEffect(() => {
+    const syncClock = () => setClock(new Date());
+    const initialTimer = window.setTimeout(syncClock, 0);
+    const interval = window.setInterval(syncClock, 60_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     function handleKeyboard(event: KeyboardEvent) {
@@ -157,6 +180,13 @@ export function TodayPlannerPage() {
       if (event.key === "Escape") {
         setMobileNavOpen(false);
         setAccountOpen(false);
+        setListManagerOpen(false);
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
         return;
       }
 
@@ -220,15 +250,16 @@ export function TodayPlannerPage() {
             </button>
           ))}
           {disabledPlannerNav.map(({ label, Icon }) => (
-            <button disabled key={label} title={`${label} — следующий этап Planner`}>
-              <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
-            </button>
+            <button disabled key={label} title={`${label} — следующий этап Planner`}><Icon size={18} strokeWidth={1.8} /><span>{label}</span></button>
           ))}
         </nav>
         <div className={styles.navDivider} />
-        <div className={styles.listHeading}><span>СПИСКИ</span><button aria-label="Добавить список" disabled title="Редактор списков будет добавлен после CRUD задач"><Plus size={17} /></button></div>
+        <div className={styles.listHeading}>
+          <span>СПИСКИ</span>
+          <button aria-label="Управлять списками" onClick={() => setListManagerOpen(true)} title="Управлять списками"><Plus size={17} /></button>
+        </div>
         <nav className={styles.contextNav}>
-          {taskLists.map((list) => {
+          {planner.lists.map((list) => {
             const Icon = listIcons[list.id as keyof typeof listIcons] ?? ListTodo;
             return (
               <button className={activeListId === list.id ? styles.contextActive : ""} key={list.id} onClick={() => selectList(list.id)}>
@@ -237,7 +268,7 @@ export function TodayPlannerPage() {
             );
           })}
         </nav>
-        <button className={styles.newList} disabled title="Редактор списков — следующий шаг"><Plus size={17} /> Новый список</button>
+        <button className={styles.newList} onClick={() => setListManagerOpen(true)}><Plus size={17} /> Управлять списками</button>
       </aside>
 
       <button className={styles.navHandle} aria-label="Открыть меню" onClick={() => setPlannerOpen(true)}><ChevronRight size={18} /></button>
@@ -246,10 +277,14 @@ export function TodayPlannerPage() {
         <header className={styles.topbar}>
           <div className={styles.pageTitle}>
             <button className={styles.mobileMenu} aria-label="Меню" onClick={() => setMobileNavOpen((value) => !value)}><Menu size={21} /></button>
-            <div><h1>{pageTitle}</h1><p>{formatDayLabel()}</p></div>
+            <div><h1>{pageTitle}</h1><p>{clock ? formatDayLabel(clock) : "Сегодня"}</p></div>
           </div>
           <div className={styles.topActions}>
-            <button className={styles.searchButton} disabled title="Глобальный поиск будет подключён после Planner CRUD"><Search size={18} /><span>Поиск или команда</span><kbd>⌘ K</kbd></button>
+            <label className={controls.search}>
+              <Search size={18} />
+              <input ref={searchRef} aria-label="Поиск задач" placeholder="Поиск задач" value={planner.query} onChange={(event) => planner.setQuery(event.target.value)} />
+              {planner.query ? <button className={controls.clearSearch} type="button" aria-label="Очистить поиск" onClick={() => planner.setQuery("")}><X size={15} /></button> : <kbd>⌘ K</kbd>}
+            </label>
             <button className={styles.iconButton} aria-label="Уведомления" disabled title="Уведомления — следующий этап"><Bell size={20} /></button>
             <div className={styles.accountWrap}>
               <button className={styles.accountButton} aria-label="Аккаунт" onClick={() => setAccountOpen((value) => !value)}><span>ST</span><ChevronDown size={16} /></button>
@@ -260,7 +295,10 @@ export function TodayPlannerPage() {
 
         <div className={styles.workspaceBody}>
           <section className={styles.mainColumn}>
-            <div className={styles.greeting}><span className={styles.sun}>☀</span><div><h2>{greetingForHour(new Date().getHours())}, Самохиддин</h2><p>Начнём с главного и сохраним спокойный темп.</p></div></div>
+            <div className={styles.greeting}>
+              <span className={styles.sun}>☀</span>
+              <div><h2>{clock ? greetingForHour(clock.getHours()) : "Добрый день"}, Самохиддин</h2><p>Начнём с главного и сохраним спокойный темп.</p></div>
+            </div>
 
             <div className={styles.aiStrip}>
               <Sparkles size={19} /><strong>CUBIK AI</strong><span>Контекст дня готов для будущего AI gateway</span>
@@ -279,16 +317,23 @@ export function TodayPlannerPage() {
             </div>
 
             <section className={styles.tasksPanel}>
-              <header><h3>{pageTitle}</h3><button aria-label="Настроить" disabled title="Сортировка и группировка — следующий шаг"><SlidersHorizontal size={18} /></button></header>
-              {planner.persistenceError && (
-                <div role="status" style={{ margin: "0 16px 10px", padding: "9px 10px", borderRadius: 9, background: "#fff3e5", color: "#9a6117", fontSize: 11 }}>
-                  {planner.persistenceError}
+              <header>
+                <div>
+                  <h3>{pageTitle}</h3>
+                  {planner.query && <span className={controls.searchStatus}>Найдено: {visibleTasks.length}</span>}
                 </div>
-              )}
+                <div className={controls.panelActions}>
+                  <SlidersHorizontal size={16} />
+                  <select className={controls.sortSelect} aria-label="Сортировка задач" value={planner.sort} onChange={(event) => planner.setSort(event.target.value as TaskSort)}>
+                    {(Object.keys(sortLabels) as TaskSort[]).map((value) => <option key={value} value={value}>{sortLabels[value]}</option>)}
+                  </select>
+                </div>
+              </header>
+              {planner.persistenceError && <div role="status" style={{ margin: "0 16px 10px", padding: "9px 10px", borderRadius: 9, background: "#fff3e5", color: "#9a6117", fontSize: 11 }}>{planner.persistenceError}</div>}
               <form className={styles.quickAdd} onSubmit={addTask}>
                 <Plus size={19} /><input ref={newTaskRef} aria-label="Новая задача" placeholder={`Добавить задачу в «${pageTitle}»`} value={newTask} onChange={(event) => setNewTask(event.target.value)} /><kbd>N</kbd>
               </form>
-              <TaskList tasks={visibleTasks} selectedId={planner.selectedId} onSelect={planner.setSelectedId} onToggle={planner.toggleTask} />
+              <TaskList tasks={visibleTasks} lists={planner.lists} selectedId={planner.selectedId} onSelect={planner.setSelectedId} onToggle={planner.toggleTask} />
               <button className={styles.laterButton} onClick={() => selectView("all")}><ChevronDown size={17} /><span>Все задачи</span><em>{planner.tasks.length}</em></button>
             </section>
           </section>
@@ -315,7 +360,7 @@ export function TodayPlannerPage() {
                   </button>
                 );
               })}
-              {showNow && <div className={styles.nowLine} style={{ top: nowTop }}><span>{new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hour12: false }).format(now)}</span><i /></div>}
+              {showNow && clock && <div className={styles.nowLine} style={{ top: nowTop }}><span>{new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hour12: false }).format(clock)}</span><i /></div>}
             </div>
             <footer><span>Запланировано</span><strong>{formatDuration(planner.summary.totalMinutes)}</strong></footer>
           </aside>
@@ -325,6 +370,8 @@ export function TodayPlannerPage() {
       {planner.selected && (
         <TaskInspector
           task={planner.selected}
+          lists={planner.lists}
+          tagSuggestions={planner.allTags}
           onClose={() => planner.setSelectedId(null)}
           onToggle={planner.toggleTask}
           onUpdate={planner.updateTask}
@@ -332,6 +379,19 @@ export function TodayPlannerPage() {
           onToggleSubtask={planner.toggleSubtask}
           onAddSubtask={planner.addSubtask}
           onAddAttachments={planner.addAttachments}
+        />
+      )}
+
+      {listManagerOpen && (
+        <ListManager
+          lists={planner.lists}
+          onClose={() => setListManagerOpen(false)}
+          onAdd={planner.addList}
+          onUpdate={planner.updateList}
+          onDelete={(id) => {
+            planner.deleteList(id);
+            if (activeListId === id) setActiveListId(null);
+          }}
         />
       )}
     </main>
