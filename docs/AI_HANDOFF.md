@@ -32,31 +32,37 @@ CUBIK — не просто task manager и не отдельный AI-чат. �
 
 Важно: эта версия Next.js содержит отличия от более ранних версий. Перед изменением архитектуры или API обязательно прочитайте соответствующий файл в `node_modules/next/dist/docs/` согласно `AGENTS.md`.
 
-`/app/today` теперь является тонким route-wrapper и импортирует интерактивный feature-модуль `src/features/planner/today-planner-page.tsx`.
+`/app/today` является тонким route-wrapper и импортирует `src/features/planner/today-planner-page.tsx`.
 
-Planner больше не хранит всю продуктовую логику прямо в странице:
+Planner разделён на слои:
 
-- `src/features/planner/model.ts` — типы и базовая доменная модель;
-- `src/features/planner/storage.ts` — versioned localStorage repository;
-- `src/features/planner/use-planner.ts` — единый service/hook для CRUD, фильтров и summary;
+- `src/features/planner/model.ts` — доменные типы `Task`, `TaskList`, Planner views/sort и фабрики initial state;
+- `src/features/planner/storage.ts` — versioned localStorage repository с миграцией v1 → v2 и нормализацией повреждённых записей;
+- `src/features/planner/use-planner.ts` — единый service/hook для CRUD, фильтров, поиска, сортировки и summary;
 - `src/features/planner/components/task-list.tsx` — список задач;
-- `src/features/planner/components/task-inspector.tsx` — полноценное редактирование задачи;
-- `src/features/planner/components/task-inspector.module.css` — стили редактора.
+- `src/features/planner/components/task-inspector.tsx` — редактирование задачи и подсказки тегов;
+- `src/features/planner/components/list-manager.tsx` — CRUD пользовательских списков;
+- `src/features/planner/components/*.module.css` и `planner-controls.module.css` — локальные стили feature UI.
 
-Backend по-прежнему отсутствует. Текущее persistence — локальное и предназначено только для стабилизации UX до Auth + PostgreSQL.
+Backend по-прежнему отсутствует. Текущее persistence — локальное и предназначено для стабилизации Planner UX до Auth + PostgreSQL.
 
 Работают:
 
 - создание, редактирование, завершение и удаление задач;
+- создание, переименование и удаление списков без удаления их задач;
 - Today / Tomorrow / Next 7 Days / Inbox / All;
-- фильтрация по базовым спискам;
-- дата, время, длительность, приоритет, список, теги, описание, повторение, связанная цель, подзадачи и метаданные вложений;
-- сохранение после перезагрузки браузера;
+- фильтрация по пользовательским спискам;
+- поиск по названию, описанию и тегам;
+- сортировка по времени, приоритету и дате создания;
+- теги с подсказками уже использованных значений;
+- дата, время, длительность, приоритет, список, описание, повторение, связанная цель, подзадачи и метаданные вложений;
+- сохранение после перезагрузки и автоматическая миграция старого localStorage;
 - динамический Summary;
 - расписание Today на основе времени задач;
-- клавиатурный выбор задачи и `N` для quick add.
+- безопасный клиентский clock для даты/приветствия/now-line;
+- клавиатурный выбор задачи, `N` для quick add и `⌘/Ctrl+K` для поиска.
 
-AI-зоны не делают демонстрационных model calls. Они только показывают место будущего server gateway и подтверждённого flow `preview → confirm → apply → undo`.
+AI-зоны не делают демонстрационных model calls. Они показывают место будущего server gateway и подтверждённого flow `preview → confirm → apply → undo`.
 
 ## 4. Что можно менять сейчас
 
@@ -64,7 +70,7 @@ AI-зоны не делают демонстрационных model calls. Он
 - типографику, цвета и дизайн-токены;
 - структуру компонентов без изменения утверждённой UX-логики;
 - Planner repository/service abstractions;
-- UX создания и редактирования задач;
+- UX создания, редактирования, поиска, сортировки и группировки задач;
 - доступность, клавиатурное управление и состояния элементов;
 - временный знак и иконки после утверждения финального брендинга.
 
@@ -78,14 +84,15 @@ AI-зоны не делают демонстрационных model calls. Он
 - контекстный, а не отдельный AI;
 - preview/confirm/undo для будущих AI-команд;
 - понятный интерфейс без перегруженности дашбордными графиками;
-- UI не должен знать, используется localStorage или будущий API: граница проходит через service/repository слой.
+- UI не должен знать, используется localStorage или будущий API: граница проходит через service/repository слой;
+- migration path локальных данных нельзя ломать без явного version bump.
 
 ## 6. Ближайшая правильная задача
 
 1. Завершить декомпозицию `TodayPlannerPage` на `AppShell`, `DomainRail`, `ModuleSidebar`, `Topbar`, `Schedule`.
-2. Сделать CRUD пользовательских списков и тегов вместо текущего фиксированного набора.
-3. Добавить поиск, сортировку и группировку задач.
-4. Выделить `CalendarBlock` и реализовать настоящий time blocking / Calendar view.
+2. Добавить группировку задач и финализировать UX тегов.
+3. Выделить `CalendarBlock` и реализовать настоящий Calendar view + time blocking на тех же сущностях задач.
+4. Затем добавить Eisenhower / Focus Lite.
 5. После стабилизации Planner UX подключить настоящую авторизацию и PostgreSQL, заменив local repository серверной реализацией без переписывания UI.
 
 Не начинать Money/Goals/Health/People параллельно, пока Planner foundation не стабилен.
@@ -104,11 +111,9 @@ AI-зоны не делают демонстрационных model calls. Он
 ## 8. Definition of Done следующего этапа
 
 - `TodayPlannerPage` больше не содержит крупные shell/navigation/schedule блоки в одном файле;
-- пользователь может создавать, переименовывать и удалять списки;
-- теги не требуют ручного ввода raw-строкой без подсказок;
-- поиск работает по названию, описанию и тегам;
-- есть сортировка минимум по времени, приоритету и дате создания;
-- Calendar view использует те же сущности задач/блоков времени, что Today;
+- есть группировка минимум по списку, приоритету и статусу;
+- Calendar view использует те же задачи и временные поля, что Today;
+- time blocking не создаёт параллельную сущность с дублирующими данными без необходимости;
 - клавиатурные сценарии не требуют мышь для основных действий;
 - UI не ломается на ширинах 390, 768, 1280 и 1440 px;
 - CI проходит typecheck, lint и production build;
