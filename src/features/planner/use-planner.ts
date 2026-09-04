@@ -3,31 +3,41 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   addDaysKey,
+  createEntityId,
   createTaskId,
+  listColorPalette,
   localDateKey,
   PlannerView,
   Task,
+  TaskList,
+  TaskSort,
 } from "./model";
-import { loadTasks, saveTasks } from "./storage";
+import { loadPlanner, savePlanner } from "./storage";
 
 type CreateTaskOptions = {
   view?: PlannerView;
   listId?: string | null;
 };
 
+const priorityOrder = { P1: 1, P2: 2, P3: 3 } as const;
+
 export function usePlanner() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [lists, setLists] = useState<TaskList[]>([]);
   const [view, setView] = useState<PlannerView>("today");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<TaskSort>("time");
   const [hydrated, setHydrated] = useState(false);
   const [loadWarning, setLoadWarning] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const result = loadTasks();
-      setTasks(result.tasks);
-      setSelectedId(result.tasks[0]?.id ?? null);
+      const result = loadPlanner();
+      setTasks(result.state.tasks);
+      setLists(result.state.lists);
+      setSelectedId(result.state.tasks[0]?.id ?? null);
       setLoadWarning(result.error);
       setHydrated(true);
     }, 0);
@@ -44,15 +54,36 @@ export function usePlanner() {
     const today = localDateKey();
     const tomorrow = addDaysKey(1);
     const nextWeek = addDaysKey(6);
+    const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
 
-    return tasks.filter((task) => {
-      if (view === "all") return true;
-      if (view === "inbox") return task.inbox || task.dueDate === null;
-      if (view === "today") return task.dueDate === today;
-      if (view === "tomorrow") return task.dueDate === tomorrow;
-      return task.dueDate !== null && task.dueDate >= today && task.dueDate <= nextWeek;
+    const visible = tasks.filter((task) => {
+      const matchesView = view === "all"
+        || (view === "inbox" && (task.inbox || task.dueDate === null))
+        || (view === "today" && task.dueDate === today)
+        || (view === "tomorrow" && task.dueDate === tomorrow)
+        || (view === "next7" && task.dueDate !== null && task.dueDate >= today && task.dueDate <= nextWeek);
+
+      if (!matchesView) return false;
+      if (!normalizedQuery) return true;
+
+      const haystack = [task.title, task.description, ...task.tags]
+        .join(" ")
+        .toLocaleLowerCase("ru-RU");
+      return haystack.includes(normalizedQuery);
     });
-  }, [tasks, view]);
+
+    return [...visible].sort((a, b) => {
+      if (sort === "priority") {
+        return priorityOrder[a.priority] - priorityOrder[b.priority]
+          || (a.startTime ?? "99:99").localeCompare(b.startTime ?? "99:99");
+      }
+      if (sort === "created") {
+        return b.createdAt.localeCompare(a.createdAt);
+      }
+      return (a.startTime ?? "99:99").localeCompare(b.startTime ?? "99:99")
+        || priorityOrder[a.priority] - priorityOrder[b.priority];
+    });
+  }, [query, sort, tasks, view]);
 
   const summary = useMemo(() => {
     const today = localDateKey();
@@ -66,9 +97,19 @@ export function usePlanner() {
     return { completed, important, inbox, progress, todayTotal: todayTasks.length, totalMinutes };
   }, [tasks]);
 
-  function commitTasks(nextTasks: Task[]) {
+  const allTags = useMemo(() => {
+    return [...new Set(tasks.flatMap((task) => task.tags.map((tag) => tag.trim()).filter(Boolean)))]
+      .sort((a, b) => a.localeCompare(b, "ru"));
+  }, [tasks]);
+
+  function commitState(nextTasks: Task[], nextLists: TaskList[]) {
     setTasks(nextTasks);
-    setSaveError(saveTasks(nextTasks));
+    setLists(nextLists);
+    setSaveError(savePlanner({ tasks: nextTasks, lists: nextLists }));
+  }
+
+  function commitTasks(nextTasks: Task[]) {
+    commitState(nextTasks, lists);
   }
 
   function addTask(title: string, options: CreateTaskOptions = {}) {
@@ -176,22 +217,62 @@ export function usePlanner() {
     commitTasks(nextTasks);
   }
 
+  function addList(name: string, color?: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const list: TaskList = {
+      id: createEntityId("list"),
+      name: trimmed,
+      color: color && listColorPalette.includes(color) ? color : listColorPalette[lists.length % listColorPalette.length],
+      createdAt: new Date().toISOString(),
+    };
+    commitState(tasks, [...lists, list]);
+    return list;
+  }
+
+  function updateList(id: string, patch: Pick<Partial<TaskList>, "name" | "color">) {
+    const nextLists = lists.map((list) => {
+      if (list.id !== id) return list;
+      const name = typeof patch.name === "string" ? patch.name.trim() : list.name;
+      const color = patch.color && /^#[0-9a-f]{6}$/i.test(patch.color) ? patch.color : list.color;
+      return { ...list, name: name || list.name, color };
+    });
+    commitState(tasks, nextLists);
+  }
+
+  function deleteList(id: string) {
+    const nextLists = lists.filter((list) => list.id !== id);
+    const nextTasks = tasks.map((task) => task.listId === id
+      ? { ...task, listId: null, updatedAt: new Date().toISOString() }
+      : task);
+    commitState(nextTasks, nextLists);
+  }
+
   return {
     addAttachments,
+    addList,
     addSubtask,
     addTask,
+    allTags,
+    deleteList,
     deleteTask,
     filteredTasks,
     hydrated,
+    lists,
     persistenceError: saveError ?? loadWarning,
+    query,
     selected,
     selectedId,
+    setQuery,
     setSelectedId,
+    setSort,
     setView,
+    sort,
     summary,
     tasks,
     toggleSubtask,
     toggleTask,
+    updateList,
     updateTask,
     view,
   };

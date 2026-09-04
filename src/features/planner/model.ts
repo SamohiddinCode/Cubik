@@ -1,6 +1,7 @@
 export type TaskPriority = "P1" | "P2" | "P3";
 export type TaskRecurrence = "none" | "daily" | "weekly" | "monthly";
 export type PlannerView = "today" | "tomorrow" | "next7" | "inbox" | "all";
+export type TaskSort = "time" | "priority" | "created";
 
 export type Subtask = {
   id: string;
@@ -40,12 +41,21 @@ export type TaskList = {
   id: string;
   name: string;
   color: string;
+  createdAt: string;
 };
 
-export const taskLists: TaskList[] = [
-  { id: "work", name: "Работа", color: "#3c70ff" },
-  { id: "personal", name: "Личное", color: "#8c65e8" },
-  { id: "study", name: "Учёба", color: "#48b58a" },
+export type PlannerState = {
+  tasks: Task[];
+  lists: TaskList[];
+};
+
+export const listColorPalette = [
+  "#3c70ff",
+  "#8c65e8",
+  "#48b58a",
+  "#ef8d32",
+  "#df5c7a",
+  "#3ca0b8",
 ];
 
 export function localDateKey(date = new Date()) {
@@ -62,11 +72,24 @@ export function addDaysKey(days: number, base = new Date()) {
   return localDateKey(date);
 }
 
-export function createTaskId() {
+export function createEntityId(prefix = "item") {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+    return `${prefix}-${crypto.randomUUID()}`;
   }
-  return `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function createTaskId() {
+  return createEntityId("task");
+}
+
+export function createInitialLists(date = new Date()): TaskList[] {
+  const createdAt = date.toISOString();
+  return [
+    { id: "work", name: "Работа", color: "#3c70ff", createdAt },
+    { id: "personal", name: "Личное", color: "#8c65e8", createdAt },
+    { id: "study", name: "Учёба", color: "#48b58a", createdAt },
+  ];
 }
 
 export function createInitialTasks(date = new Date()): Task[] {
@@ -146,4 +169,11 @@ export function createInitialTasks(date = new Date()): Task[] {
       completedAt: null,
     },
   ];
+}
+
+export function createInitialPlannerState(date = new Date()): PlannerState {
+  return {
+    tasks: createInitialTasks(date),
+    lists: createInitialLists(date),
+  };
 }

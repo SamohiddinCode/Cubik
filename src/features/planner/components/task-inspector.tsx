@@ -14,10 +14,12 @@ import {
 } from "lucide-react";
 import styles from "@/app/app/today/today.module.css";
 import editor from "./task-inspector.module.css";
-import { Task, TaskPriority, TaskRecurrence, taskLists } from "../model";
+import { Task, TaskList as PlannerTaskList, TaskPriority, TaskRecurrence } from "../model";
 
 type TaskInspectorProps = {
   task: Task;
+  lists: PlannerTaskList[];
+  tagSuggestions: string[];
   onClose: () => void;
   onToggle: (id: string) => void;
   onUpdate: (id: string, patch: Partial<Task>) => void;
@@ -61,12 +63,18 @@ function createDraft(task: Task): Draft {
   };
 }
 
+function parseTags(value: string) {
+  return [...new Set(value.split(",").map((tag) => tag.trim()).filter(Boolean))];
+}
+
 export function TaskInspector(props: TaskInspectorProps) {
   return <TaskInspectorEditor key={props.task.id} {...props} />;
 }
 
 function TaskInspectorEditor({
   task,
+  lists,
+  tagSuggestions,
   onClose,
   onToggle,
   onUpdate,
@@ -78,6 +86,8 @@ function TaskInspectorEditor({
   const [draft, setDraft] = useState<Draft>(() => createDraft(task));
   const [subtaskTitle, setSubtaskTitle] = useState("");
   const completedSubtasks = task.subtasks.filter((subtask) => subtask.done).length;
+  const currentTags = parseTags(draft.tags);
+  const availableTags = tagSuggestions.filter((tag) => !currentTags.includes(tag)).slice(0, 8);
 
   function save(event: FormEvent) {
     event.preventDefault();
@@ -93,12 +103,16 @@ function TaskInspectorEditor({
       durationMinutes: draft.durationMinutes ? Math.max(0, Number(draft.durationMinutes)) : null,
       priority: draft.priority,
       listId: draft.listId || null,
-      tags: draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+      tags: parseTags(draft.tags),
       goalId: draft.goalId.trim() || null,
       recurrence: draft.recurrence,
       habit: draft.habit,
       inbox: draft.inbox || !draft.dueDate,
     });
+  }
+
+  function addSuggestedTag(tag: string) {
+    setDraft((current) => ({ ...current, tags: [...parseTags(current.tags), tag].join(", ") }));
   }
 
   function addSubtask(event: FormEvent) {
@@ -127,67 +141,43 @@ function TaskInspectorEditor({
           </button>
           <h2>{task.title}</h2>
         </div>
-        <button className={styles.iconButton} aria-label="Закрыть детали" onClick={onClose}>
-          <X size={20} />
-        </button>
+        <button className={styles.iconButton} aria-label="Закрыть детали" onClick={onClose}><X size={20} /></button>
       </header>
 
       <div className={styles.inspectorBody}>
         <form className={editor.form} onSubmit={save}>
           <label className={editor.field}>
             <span>Название</span>
-            <input
-              className={editor.titleInput}
-              value={draft.title}
-              onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-            />
+            <input className={editor.titleInput} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
           </label>
 
           <label className={editor.field}>
             <span>Описание</span>
-            <textarea
-              placeholder="Контекст, заметки, критерий готовности…"
-              value={draft.description}
-              onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
-            />
+            <textarea placeholder="Контекст, заметки, критерий готовности…" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} />
           </label>
 
           <div className={editor.twoColumns}>
-            <label>
-              <span>Дата</span>
-              <input type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} />
-            </label>
-            <label>
-              <span>Длительность, мин</span>
-              <input min="0" step="5" type="number" value={draft.durationMinutes} onChange={(event) => setDraft((current) => ({ ...current, durationMinutes: event.target.value }))} />
-            </label>
+            <label><span>Дата</span><input type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} /></label>
+            <label><span>Длительность, мин</span><input min="0" step="5" type="number" value={draft.durationMinutes} onChange={(event) => setDraft((current) => ({ ...current, durationMinutes: event.target.value }))} /></label>
           </div>
 
           <div className={editor.twoColumns}>
-            <label>
-              <span>Начало</span>
-              <input type="time" value={draft.startTime} onChange={(event) => setDraft((current) => ({ ...current, startTime: event.target.value }))} />
-            </label>
-            <label>
-              <span>Конец</span>
-              <input type="time" value={draft.endTime} onChange={(event) => setDraft((current) => ({ ...current, endTime: event.target.value }))} />
-            </label>
+            <label><span>Начало</span><input type="time" value={draft.startTime} onChange={(event) => setDraft((current) => ({ ...current, startTime: event.target.value }))} /></label>
+            <label><span>Конец</span><input type="time" value={draft.endTime} onChange={(event) => setDraft((current) => ({ ...current, endTime: event.target.value }))} /></label>
           </div>
 
           <div className={editor.twoColumns}>
             <label>
               <span>Приоритет</span>
               <select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value as TaskPriority }))}>
-                <option value="P1">P1 — высокий</option>
-                <option value="P2">P2 — средний</option>
-                <option value="P3">P3 — обычный</option>
+                <option value="P1">P1 — высокий</option><option value="P2">P2 — средний</option><option value="P3">P3 — обычный</option>
               </select>
             </label>
             <label>
               <span>Список</span>
               <select value={draft.listId} onChange={(event) => setDraft((current) => ({ ...current, listId: event.target.value }))}>
-                <option value="">Входящие</option>
-                {taskLists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}
+                <option value="">Без списка</option>
+                {lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}
               </select>
             </label>
           </div>
@@ -196,32 +186,25 @@ function TaskInspectorEditor({
             <span>Метки</span>
             <input placeholder="MVP, дизайн, звонок" value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} />
           </label>
+          {availableTags.length > 0 && (
+            <div className={editor.tagSuggestions} aria-label="Предлагаемые метки">
+              {availableTags.map((tag) => <button key={tag} type="button" onClick={() => addSuggestedTag(tag)}>#{tag}</button>)}
+            </div>
+          )}
 
           <div className={editor.twoColumns}>
             <label>
               <span>Повторение</span>
               <select value={draft.recurrence} onChange={(event) => setDraft((current) => ({ ...current, recurrence: event.target.value as TaskRecurrence }))}>
-                <option value="none">Не повторять</option>
-                <option value="daily">Каждый день</option>
-                <option value="weekly">Каждую неделю</option>
-                <option value="monthly">Каждый месяц</option>
+                <option value="none">Не повторять</option><option value="daily">Каждый день</option><option value="weekly">Каждую неделю</option><option value="monthly">Каждый месяц</option>
               </select>
             </label>
-            <label>
-              <span>Связанная цель</span>
-              <input placeholder="Например launch-mvp" value={draft.goalId} onChange={(event) => setDraft((current) => ({ ...current, goalId: event.target.value }))} />
-            </label>
+            <label><span>Связанная цель</span><input placeholder="Например launch-mvp" value={draft.goalId} onChange={(event) => setDraft((current) => ({ ...current, goalId: event.target.value }))} /></label>
           </div>
 
           <div className={editor.checks}>
-            <label className={editor.checkRow}>
-              <input type="checkbox" checked={draft.habit} onChange={(event) => setDraft((current) => ({ ...current, habit: event.target.checked }))} />
-              <span>Отметить как привычку</span>
-            </label>
-            <label className={editor.checkRow}>
-              <input type="checkbox" checked={draft.inbox} onChange={(event) => setDraft((current) => ({ ...current, inbox: event.target.checked }))} />
-              <span>Оставить во входящих</span>
-            </label>
+            <label className={editor.checkRow}><input type="checkbox" checked={draft.habit} onChange={(event) => setDraft((current) => ({ ...current, habit: event.target.checked }))} /><span>Отметить как привычку</span></label>
+            <label className={editor.checkRow}><input type="checkbox" checked={draft.inbox} onChange={(event) => setDraft((current) => ({ ...current, inbox: event.target.checked }))} /><span>Оставить во входящих</span></label>
           </div>
 
           <div className={editor.actions}>
@@ -230,54 +213,27 @@ function TaskInspectorEditor({
           </div>
         </form>
 
-        {task.goalId && (
-          <section className={styles.goalCard}>
-            <small>Связанная цель</small>
-            <div><Target size={18} /><strong>{task.goalId === "launch-mvp" ? "Запуск MVP" : task.goalId}</strong></div>
-          </section>
-        )}
+        {task.goalId && <section className={styles.goalCard}><small>Связанная цель</small><div><Target size={18} /><strong>{task.goalId === "launch-mvp" ? "Запуск MVP" : task.goalId}</strong></div></section>}
 
         <section className={editor.subtaskSection}>
-          <div className={editor.sectionHeader}>
-            <strong>Подзадачи</strong>
-            <span>{completedSubtasks}/{task.subtasks.length}</span>
-          </div>
+          <div className={editor.sectionHeader}><strong>Подзадачи</strong><span>{completedSubtasks}/{task.subtasks.length}</span></div>
           <div className={editor.subtaskList}>
-            {task.subtasks.map((subtask) => (
-              <label className={editor.subtask} key={subtask.id}>
-                <input type="checkbox" checked={subtask.done} onChange={() => onToggleSubtask(task.id, subtask.id)} />
-                <span className={subtask.done ? editor.subtaskDone : ""}>{subtask.title}</span>
-              </label>
-            ))}
+            {task.subtasks.map((subtask) => <label className={editor.subtask} key={subtask.id}><input type="checkbox" checked={subtask.done} onChange={() => onToggleSubtask(task.id, subtask.id)} /><span className={subtask.done ? editor.subtaskDone : ""}>{subtask.title}</span></label>)}
           </div>
-          <form className={editor.subtaskForm} onSubmit={addSubtask}>
-            <input aria-label="Новая подзадача" placeholder="Добавить подзадачу" value={subtaskTitle} onChange={(event) => setSubtaskTitle(event.target.value)} />
-            <button type="submit" aria-label="Добавить подзадачу"><Plus size={15} /></button>
-          </form>
+          <form className={editor.subtaskForm} onSubmit={addSubtask}><input aria-label="Новая подзадача" placeholder="Добавить подзадачу" value={subtaskTitle} onChange={(event) => setSubtaskTitle(event.target.value)} /><button type="submit" aria-label="Добавить подзадачу"><Plus size={15} /></button></form>
         </section>
 
         <section className={editor.attachmentSection}>
           <div className={editor.sectionHeader}><strong>Вложения</strong><span>{task.attachments.length}</span></div>
           <label className={editor.attachmentButton}>
             <Paperclip size={15} />Добавить файлы
-            <input
-              multiple
-              type="file"
-              onChange={(event) => {
-                const names = Array.from(event.currentTarget.files ?? []).map((file) => file.name);
-                onAddAttachments(task.id, names);
-                event.currentTarget.value = "";
-              }}
-            />
+            <input multiple type="file" onChange={(event) => { const names = Array.from(event.currentTarget.files ?? []).map((file) => file.name); onAddAttachments(task.id, names); event.currentTarget.value = ""; }} />
           </label>
           {task.attachments.length > 0 && <div className={editor.attachmentList}>{task.attachments.map((attachment) => <span key={attachment.id}>{attachment.name}</span>)}</div>}
           <p className={editor.note}>В локальном MVP сохраняются названия вложений. Сами файлы будут храниться в object storage после подключения backend.</p>
         </section>
 
-        <section className={styles.aiPanel}>
-          <header><Sparkles size={18} /><strong>CUBIK AI</strong></header>
-          <p>Контекст задачи подготовлен. AI-действия будут подключены через preview → confirm → apply → undo после серверного gateway.</p>
-        </section>
+        <section className={styles.aiPanel}><header><Sparkles size={18} /><strong>CUBIK AI</strong></header><p>Контекст задачи подготовлен. AI-действия будут подключены через preview → confirm → apply → undo после серверного gateway.</p></section>
         <div className={styles.inspectorTools}><button aria-label="Дата"><CalendarDays size={18} /></button><button aria-label="Вложения"><Paperclip size={18} /></button></div>
       </div>
     </aside>
