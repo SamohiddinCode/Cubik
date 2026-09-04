@@ -1,17 +1,25 @@
 import {
-  createInitialTasks,
+  createInitialLists,
+  createInitialPlannerState,
+  PlannerState,
   Task,
   TaskAttachment,
+  TaskList,
   TaskPriority,
   TaskRecurrence,
   Subtask,
 } from "./model";
 
-const STORAGE_KEY = "cubik.planner.tasks.v1";
+const STORAGE_KEY = "cubik.planner.v2";
+const LEGACY_TASKS_KEY = "cubik.planner.tasks.v1";
 
-type StoredPlanner = {
+type StoredPlanner = PlannerState & {
+  version: 2;
+};
+
+type LegacyStoredPlanner = {
   version: 1;
-  tasks: Task[];
+  tasks: unknown[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -78,45 +86,101 @@ function normalizeTask(value: unknown): Task | null {
   };
 }
 
-export function loadTasks(): { tasks: Task[]; error: string | null } {
-  const fallback = () => createInitialTasks();
+function normalizeList(value: unknown): TaskList | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string") return null;
+  const color = typeof value.color === "string" && /^#[0-9a-f]{6}$/i.test(value.color) ? value.color : "#3c70ff";
+  return {
+    id: value.id,
+    name: value.name.trim() || "Без названия",
+    color,
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString(),
+  };
+}
+
+function normalizeTasks(value: unknown) {
+  if (!Array.isArray(value)) return { tasks: [] as Task[], invalidCount: 0 };
+  const tasks = value.flatMap((task) => {
+    const normalized = normalizeTask(task);
+    return normalized ? [normalized] : [];
+  });
+  return { tasks, invalidCount: value.length - tasks.length };
+}
+
+function normalizeLists(value: unknown) {
+  if (!Array.isArray(value)) return { lists: [] as TaskList[], invalidCount: 0 };
+  const lists = value.flatMap((list) => {
+    const normalized = normalizeList(list);
+    return normalized ? [normalized] : [];
+  });
+  return { lists, invalidCount: value.length - lists.length };
+}
+
+function saveRawPlanner(state: PlannerState) {
+  const payload: StoredPlanner = { version: 2, ...state };
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+}
+
+function migrateLegacy(): { state: PlannerState; warning: string | null } | null {
+  const raw = window.localStorage.getItem(LEGACY_TASKS_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<LegacyStoredPlanner>;
+    if (parsed.version !== 1 || !Array.isArray(parsed.tasks)) return null;
+    const { tasks, invalidCount } = normalizeTasks(parsed.tasks);
+    const state = { tasks, lists: createInitialLists() };
+    saveRawPlanner(state);
+    return {
+      state,
+      warning: invalidCount > 0
+        ? `Данные Planner обновлены. Пропущено повреждённых задач: ${invalidCount}.`
+        : "Данные Planner автоматически обновлены до нового формата.",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function loadPlanner(): { state: PlannerState; error: string | null } {
+  const fallback = () => createInitialPlannerState();
 
   if (typeof window === "undefined") {
-    return { tasks: fallback(), error: null };
+    return { state: fallback(), error: null };
   }
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { tasks: fallback(), error: null };
-
-    const parsed = JSON.parse(raw) as Partial<StoredPlanner>;
-    if (parsed.version !== 1 || !Array.isArray(parsed.tasks)) {
-      return { tasks: fallback(), error: "Формат локальных данных устарел. Загружены безопасные демонстрационные данные." };
+    if (!raw) {
+      const migrated = migrateLegacy();
+      if (migrated) return { state: migrated.state, error: migrated.warning };
+      return { state: fallback(), error: null };
     }
 
-    const tasks = parsed.tasks.flatMap((task) => {
-      const normalized = normalizeTask(task);
-      return normalized ? [normalized] : [];
-    });
-    const invalidCount = parsed.tasks.length - tasks.length;
+    const parsed = JSON.parse(raw) as Partial<StoredPlanner>;
+    if (parsed.version !== 2 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.lists)) {
+      return { state: fallback(), error: "Формат локальных данных Planner повреждён. Загружены безопасные демонстрационные данные." };
+    }
+
+    const { tasks, invalidCount: invalidTasks } = normalizeTasks(parsed.tasks);
+    const { lists, invalidCount: invalidLists } = normalizeLists(parsed.lists);
+    const issues = invalidTasks + invalidLists;
 
     return {
-      tasks,
-      error: invalidCount > 0 ? `Пропущено повреждённых задач: ${invalidCount}. Остальные данные загружены.` : null,
+      state: { tasks, lists },
+      error: issues > 0 ? `Пропущено повреждённых записей Planner: ${issues}. Остальные данные загружены.` : null,
     };
   } catch {
-    return { tasks: fallback(), error: "Не удалось прочитать локальное хранилище. Загружены безопасные демонстрационные данные." };
+    return { state: fallback(), error: "Не удалось прочитать локальное хранилище Planner. Загружены безопасные демонстрационные данные." };
   }
 }
 
-export function saveTasks(tasks: Task[]): string | null {
+export function savePlanner(state: PlannerState): string | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const payload: StoredPlanner = { version: 1, tasks };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    saveRawPlanner(state);
     return null;
   } catch {
-    return "Не удалось сохранить изменения в браузере.";
+    return "Не удалось сохранить изменения Planner в браузере.";
   }
 }
