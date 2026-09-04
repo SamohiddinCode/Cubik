@@ -1,16 +1,17 @@
 import { KeyboardEvent } from "react";
 import { CalendarDays, Check, Repeat2, Star } from "lucide-react";
 import styles from "@/app/app/today/today.module.css";
-import { Task, taskLists } from "../model";
+import { Task, TaskList as PlannerTaskList } from "../model";
 
 type TaskListProps = {
   tasks: Task[];
+  lists: PlannerTaskList[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
 };
 
-export function TaskList({ tasks, selectedId, onSelect, onToggle }: TaskListProps) {
+export function TaskList({ tasks, lists, selectedId, onSelect, onToggle }: TaskListProps) {
   function selectWithKeyboard(event: KeyboardEvent<HTMLElement>, id: string) {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
@@ -20,7 +21,7 @@ export function TaskList({ tasks, selectedId, onSelect, onToggle }: TaskListProp
   if (tasks.length === 0) {
     return (
       <div role="status" style={{ padding: "26px 18px", color: "#718098", fontSize: 13 }}>
-        Здесь пока нет задач. Добавьте первую задачу выше.
+        Здесь пока нет задач. Добавьте первую задачу выше или измените фильтр поиска.
       </div>
     );
   }
@@ -28,7 +29,7 @@ export function TaskList({ tasks, selectedId, onSelect, onToggle }: TaskListProp
   return (
     <div className={styles.taskList}>
       {tasks.map((task) => {
-        const list = taskLists.find((item) => item.id === task.listId);
+        const list = lists.find((item) => item.id === task.listId);
         return (
           <article
             aria-current={task.id === selectedId ? "true" : undefined}
@@ -65,6 +66,7 @@ export function TaskList({ tasks, selectedId, onSelect, onToggle }: TaskListProp
                     {list.name}
                   </span>
                 )}
+                {task.tags.slice(0, 2).map((tag) => <span key={tag}>#{tag}</span>)}
                 {task.habit && (
                   <span className={styles.habitChip}>
                     <Repeat2 size={13} />Привычка
