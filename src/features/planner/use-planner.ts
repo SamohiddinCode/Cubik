@@ -24,17 +24,16 @@ export function usePlanner() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    const result = loadTasks();
-    setTasks(result.tasks);
-    setSelectedId(result.tasks[0]?.id ?? null);
-    setLoadWarning(result.error);
-    setHydrated(true);
-  }, []);
+    const timer = window.setTimeout(() => {
+      const result = loadTasks();
+      setTasks(result.tasks);
+      setSelectedId(result.tasks[0]?.id ?? null);
+      setLoadWarning(result.error);
+      setHydrated(true);
+    }, 0);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    setSaveError(saveTasks(tasks));
-  }, [hydrated, tasks]);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const selected = useMemo(
     () => tasks.find((task) => task.id === selectedId) ?? null,
@@ -66,6 +65,11 @@ export function usePlanner() {
 
     return { completed, important, inbox, progress, todayTotal: todayTasks.length, totalMinutes };
   }, [tasks]);
+
+  function commitTasks(nextTasks: Task[]) {
+    setTasks(nextTasks);
+    setSaveError(saveTasks(nextTasks));
+  }
 
   function addTask(title: string, options: CreateTaskOptions = {}) {
     const trimmed = title.trim();
@@ -102,19 +106,20 @@ export function usePlanner() {
       completedAt: null,
     };
 
-    setTasks((current) => [task, ...current]);
+    commitTasks([task, ...tasks]);
     setSelectedId(task.id);
     return task;
   }
 
   function updateTask(id: string, patch: Partial<Task>) {
-    setTasks((current) => current.map((task) => task.id === id
+    const nextTasks = tasks.map((task) => task.id === id
       ? { ...task, ...patch, id: task.id, updatedAt: new Date().toISOString() }
-      : task));
+      : task);
+    commitTasks(nextTasks);
   }
 
   function toggleTask(id: string) {
-    setTasks((current) => current.map((task) => {
+    const nextTasks = tasks.map((task) => {
       if (task.id !== id) return task;
       const done = !task.done;
       return {
@@ -123,39 +128,42 @@ export function usePlanner() {
         completedAt: done ? new Date().toISOString() : null,
         updatedAt: new Date().toISOString(),
       };
-    }));
+    });
+    commitTasks(nextTasks);
   }
 
   function deleteTask(id: string) {
-    setTasks((current) => current.filter((task) => task.id !== id));
+    commitTasks(tasks.filter((task) => task.id !== id));
     setSelectedId((current) => current === id ? null : current);
   }
 
   function toggleSubtask(taskId: string, subtaskId: string) {
-    setTasks((current) => current.map((task) => task.id === taskId
+    const nextTasks = tasks.map((task) => task.id === taskId
       ? {
           ...task,
           subtasks: task.subtasks.map((subtask) => subtask.id === subtaskId ? { ...subtask, done: !subtask.done } : subtask),
           updatedAt: new Date().toISOString(),
         }
-      : task));
+      : task);
+    commitTasks(nextTasks);
   }
 
   function addSubtask(taskId: string, title: string) {
     const trimmed = title.trim();
     if (!trimmed) return;
-    setTasks((current) => current.map((task) => task.id === taskId
+    const nextTasks = tasks.map((task) => task.id === taskId
       ? {
           ...task,
           subtasks: [...task.subtasks, { id: createTaskId(), title: trimmed, done: false }],
           updatedAt: new Date().toISOString(),
         }
-      : task));
+      : task);
+    commitTasks(nextTasks);
   }
 
   function addAttachments(taskId: string, names: string[]) {
     if (names.length === 0) return;
-    setTasks((current) => current.map((task) => task.id === taskId
+    const nextTasks = tasks.map((task) => task.id === taskId
       ? {
           ...task,
           attachments: [
@@ -164,7 +172,8 @@ export function usePlanner() {
           ],
           updatedAt: new Date().toISOString(),
         }
-      : task));
+      : task);
+    commitTasks(nextTasks);
   }
 
   return {
