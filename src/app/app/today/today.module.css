@@ -64,7 +64,7 @@
 .toolButton.toolActive { background: #e8f0fb; box-shadow: inset 3px 0 0 #2865df; color: #174dbf; font-weight: 750; }
 .taskTree { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .22s ease, opacity .16s ease; }
 .taskTreeOpen { grid-template-rows: 1fr; opacity: 1; }
-.taskTreeInner { border-bottom: 1px solid #dce4ef; border-left: 1px solid #dfe6f0; min-height: 0; overflow: hidden; padding: 9px 0 14px 9px; }
+.taskTreeInner { min-height: 0; overflow: hidden; padding: 9px 0 14px 9px; }
 .treeHeading { color: #8a96a8; font-size: 9px; font-weight: 800; letter-spacing: .1em; padding: 3px 10px 7px; }
 .treeDivider { background: var(--line); height: 1px; margin: 12px 9px; }
 .toolDivider { background: var(--line); height: 1px; margin: 10px 9px; }
