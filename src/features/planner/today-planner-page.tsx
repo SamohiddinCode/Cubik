@@ -36,7 +36,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { CubikMark } from "@/components/cubik-mark";
 import styles from "@/app/app/today/today.module.css";
 import controls from "./planner-controls.module.css";
-import { localDateKey, PlannerView, Task, TaskGroup, TaskSort } from "./model";
+import { addDaysKey, localDateKey, PlannerView, Task, TaskGroup, TaskSort } from "./model";
 import { usePlanner } from "./use-planner";
 import { TaskList } from "./components/task-list";
 import { TaskInspector } from "./components/task-inspector";
@@ -84,6 +84,14 @@ const groupLabels: Record<TaskGroup, string> = {
   list: "По списку",
   priority: "По приоритету",
   status: "По статусу",
+};
+
+type TaskFilter = "important" | "undated" | "completed";
+
+const filterLabels: Record<TaskFilter, string> = {
+  important: "Важные",
+  undated: "Без даты",
+  completed: "Завершённые",
 };
 
 const scheduleStartMinutes = 9 * 60;
@@ -143,22 +151,46 @@ export function TodayPlannerPage() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [listManagerOpen, setListManagerOpen] = useState(false);
   const [activeListId, setActiveListId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<TaskFilter | null>(null);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [clock, setClock] = useState<Date | null>(null);
   const newTaskRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const activeList = planner.lists.find((list) => list.id === activeListId) ?? null;
-  const visibleTasks = activeListId
+  const tasksInActiveList = activeListId
     ? planner.filteredTasks.filter((task) => task.listId === activeListId)
     : planner.filteredTasks;
+  const visibleTasks = tasksInActiveList.filter((task) => {
+    if (activeTag && !task.tags.includes(activeTag)) return false;
+    if (activeFilter === "important") return !task.done && (task.priority === "P1" || task.priority === "P2");
+    if (activeFilter === "undated") return task.dueDate === null;
+    if (activeFilter === "completed") return task.done;
+    return true;
+  });
 
-  const pageTitle = activeList?.name ?? viewLabels[planner.view];
+  const pageTitle = activeList?.name
+    ?? (activeTag ? `#${activeTag}` : null)
+    ?? (activeFilter ? filterLabels[activeFilter] : null)
+    ?? viewLabels[planner.view];
+  const todayKey = localDateKey();
+  const tomorrowKey = addDaysKey(1);
+  const nextWeekKey = addDaysKey(6);
+  const viewCounts: Record<PlannerView, number> = {
+    today: planner.tasks.filter((task) => task.dueDate === todayKey && !task.done).length,
+    tomorrow: planner.tasks.filter((task) => task.dueDate === tomorrowKey && !task.done).length,
+    next7: planner.tasks.filter((task) => task.dueDate !== null && task.dueDate >= todayKey && task.dueDate <= nextWeekKey && !task.done).length,
+    all: planner.tasks.filter((task) => !task.done).length,
+    inbox: planner.summary.inbox,
+  };
   const plannerNav: { label: string; Icon: typeof CalendarDays; view: PlannerView; count?: number }[] = [
-    { label: "Сегодня", Icon: CalendarDays, view: "today" },
-    { label: "Завтра", Icon: CalendarDays, view: "tomorrow" },
-    { label: "Следующие 7 дней", Icon: CalendarDays, view: "next7" },
-    { label: "Все задачи", Icon: ListTodo, view: "all" },
-    { label: "Входящие", Icon: Inbox, view: "inbox", count: planner.summary.inbox },
+    { label: "Сегодня", Icon: CalendarDays, view: "today", count: viewCounts.today },
+    { label: "Завтра", Icon: CalendarDays, view: "tomorrow", count: viewCounts.tomorrow },
+    { label: "Следующие 7 дней", Icon: CalendarDays, view: "next7", count: viewCounts.next7 },
+    { label: "Все задачи", Icon: ListTodo, view: "all", count: viewCounts.all },
+    { label: "Входящие", Icon: Inbox, view: "inbox", count: viewCounts.inbox },
   ];
 
   const today = clock ? localDateKey(clock) : null;
@@ -214,12 +246,32 @@ export function TodayPlannerPage() {
   function selectView(view: PlannerView) {
     planner.setView(view);
     setActiveListId(null);
+    setActiveFilter(null);
+    setActiveTag(null);
     setMobileNavOpen(false);
   }
 
   function selectList(listId: string) {
     planner.setView("all");
     setActiveListId(listId);
+    setActiveFilter(null);
+    setActiveTag(null);
+    setMobileNavOpen(false);
+  }
+
+  function selectFilter(filter: TaskFilter) {
+    planner.setView("all");
+    setActiveListId(null);
+    setActiveTag(null);
+    setActiveFilter(filter);
+    setMobileNavOpen(false);
+  }
+
+  function selectTag(tag: string) {
+    planner.setView("all");
+    setActiveListId(null);
+    setActiveFilter(null);
+    setActiveTag(tag);
     setMobileNavOpen(false);
   }
 
@@ -271,7 +323,7 @@ export function TodayPlannerPage() {
               <div className={styles.treeHeading}>УМНЫЕ СПИСКИ</div>
               <div className={styles.contextNav}>
                 {plannerNav.map(({ label, Icon, view, count }) => (
-                  <button className={!activeListId && planner.view === view ? styles.contextActive : ""} key={label} onClick={() => selectView(view)}>
+                    <button className={!activeListId && !activeFilter && !activeTag && planner.view === view ? styles.contextActive : ""} key={label} onClick={() => selectView(view)}>
                     <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{typeof count === "number" && count > 0 && <em>{count}</em>}
                   </button>
                 ))}
@@ -296,8 +348,35 @@ export function TodayPlannerPage() {
               <button className={styles.newList} onClick={() => setListManagerOpen(true)}><Plus size={16} /> Управлять списками</button>
 
               <div className={styles.treeDivider} />
-              <button className={styles.treeSection} disabled title="Фильтры — следующий этап Planner"><Filter size={16} /><span>Фильтры</span><Plus size={14} /></button>
-              <button className={styles.treeSection} disabled title="Метки — следующий этап Planner"><Tags size={16} /><span>Метки</span><Plus size={14} /></button>
+              <button aria-expanded={filtersOpen} className={styles.treeSection} onClick={() => setFiltersOpen((value) => !value)} type="button">
+                <Filter size={16} /><span>Фильтры</span>{filtersOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+              {filtersOpen && (
+                <div className={styles.nestedOptions}>
+                  {(Object.keys(filterLabels) as TaskFilter[]).map((filter) => {
+                    const count = planner.tasks.filter((task) => {
+                      if (filter === "important") return !task.done && (task.priority === "P1" || task.priority === "P2");
+                      if (filter === "undated") return task.dueDate === null;
+                      return task.done;
+                    }).length;
+                    return <button className={activeFilter === filter ? styles.contextActive : ""} key={filter} onClick={() => selectFilter(filter)}><span>{filterLabels[filter]}</span><em>{count}</em></button>;
+                  })}
+                </div>
+              )}
+              <button aria-expanded={tagsOpen} className={styles.treeSection} onClick={() => setTagsOpen((value) => !value)} type="button">
+                <Tags size={16} /><span>Метки</span>{tagsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+              {tagsOpen && (
+                <div className={styles.nestedOptions}>
+                  {planner.allTags.length === 0
+                    ? <span className={styles.emptyTree}>Пока нет меток</span>
+                    : planner.allTags.map((tag) => (
+                      <button className={activeTag === tag ? styles.contextActive : ""} key={tag} onClick={() => selectTag(tag)}>
+                        <span>#{tag}</span><em>{planner.tasks.filter((task) => task.tags.includes(tag)).length}</em>
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
 

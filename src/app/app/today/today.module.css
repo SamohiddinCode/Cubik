@@ -66,7 +66,13 @@
 .treeDivider { background: var(--line); height: 1px; margin: 12px 9px; }
 .toolDivider { background: var(--line); height: 1px; margin: 10px 9px; }
 .treeSection { align-items: center; background: transparent; border: 0; border-radius: 10px; color: #6e7b90; display: grid; font-size: 12px; gap: 10px; grid-template-columns: 17px 1fr 15px; min-height: 38px; padding: 0 10px; text-align: left; width: 100%; }
-.treeSection:disabled { cursor: not-allowed; opacity: .62; }
+.treeSection:hover { background: #eef3fa; color: #344158; }
+.nestedOptions { display: grid; gap: 3px; padding: 2px 0 6px 27px; }
+.nestedOptions button { align-items: center; background: transparent; border: 0; border-radius: 8px; color: #657186; display: grid; font-size: 11px; grid-template-columns: 1fr auto; min-height: 31px; padding: 0 8px; text-align: left; }
+.nestedOptions button:hover { background: #eef3fa; }
+.nestedOptions button.contextActive { background: #e6eef9; color: #174dbf; font-weight: 700; }
+.nestedOptions em { background: #e6edf6; border-radius: 7px; font-size: 9px; font-style: normal; padding: 2px 6px; }
+.emptyTree { color: #929cad; font-size: 10px; padding: 7px 8px; }
 .contextNav { display: grid; gap: 4px; }
 .contextNav button { align-items: center; background: transparent; border: 0; border-radius: 10px; color: #354158; display: grid; font-size: 12px; gap: 10px; grid-template-columns: 18px 1fr auto; min-height: 38px; padding: 0 10px; text-align: left; }
 .contextNav button:hover { background: #eef3fa; }
