@@ -5,6 +5,7 @@ import {
   Bell,
   BriefcaseBusiness,
   CalendarDays,
+  CheckSquare2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -22,25 +23,33 @@ import {
   Repeat2,
   Search,
   Settings,
+  Settings2,
   SlidersHorizontal,
   Sparkles,
+  Star,
   Target,
   Tags,
+  Trash2,
   TrendingUp,
   UserRound,
   UsersRound,
   WalletCards,
+  Undo2,
+  Redo2,
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { CubikMark } from "@/components/cubik-mark";
 import styles from "@/app/app/today/today.module.css";
 import controls from "./planner-controls.module.css";
-import { addDaysKey, localDateKey, PlannerView, Task, TaskGroup, TaskSort } from "./model";
+import { addDaysKey, createEntityId, localDateKey, PlannerView, Task, TaskGroup, TaskPriority, TaskSort } from "./model";
 import { usePlanner } from "./use-planner";
 import { TaskList } from "./components/task-list";
 import { TaskInspector } from "./components/task-inspector";
 import { ListManager } from "./components/list-manager";
+import { TaskSummary } from "./components/task-summary";
+import { PlannerCalendar } from "./components/planner-calendar";
+import { schedulePatch } from "./calendar-model";
 
 const domains = [
   { label: "Planner / Time", Icon: CalendarDays, active: true },
@@ -52,7 +61,6 @@ const domains = [
 ];
 
 const disabledPlannerNav = [
-  { label: "Календарь", Icon: CalendarDays },
   { label: "Матрица Эйзенхауэра", Icon: Grid2X2 },
   { label: "Фокус", Icon: Focus },
   { label: "Привычки", Icon: Repeat2 },
@@ -74,6 +82,7 @@ const viewLabels: Record<PlannerView, string> = {
 };
 
 const sortLabels: Record<TaskSort, string> = {
+  manual: "Ручной порядок",
   time: "По времени",
   priority: "По приоритету",
   created: "Сначала новые",
@@ -86,13 +95,39 @@ const groupLabels: Record<TaskGroup, string> = {
   status: "По статусу",
 };
 
-type TaskFilter = "important" | "undated" | "completed";
+type TaskFilter = "favorite" | "important" | "overdue" | "undated" | "completed";
 
 const filterLabels: Record<TaskFilter, string> = {
+  favorite: "Избранные",
   important: "Важные",
+  overdue: "Просроченные",
   undated: "Без даты",
   completed: "Завершённые",
 };
+
+type SavedSmartFilter = {
+  id: string;
+  name: string;
+  view: PlannerView;
+  filter: TaskFilter | null;
+  tag: string | null;
+  listId: string | null;
+  query: string;
+};
+
+const SMART_FILTERS_KEY = "cubik.planner.smart-filters.v1";
+const QUICK_FIELDS_KEY = "cubik.planner.quick-fields.v1";
+
+function isSavedSmartFilter(value: unknown): value is SavedSmartFilter {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.id === "string" && typeof item.name === "string"
+    && ["today", "tomorrow", "next7", "inbox", "all"].includes(String(item.view))
+    && (item.filter === null || Object.hasOwn(filterLabels, String(item.filter)))
+    && (item.tag === null || typeof item.tag === "string")
+    && (item.listId === null || typeof item.listId === "string")
+    && typeof item.query === "string";
+}
 
 const scheduleStartMinutes = 9 * 60;
 const scheduleEndMinutes = 19 * 60;
@@ -145,6 +180,14 @@ function eventTone(priority: Task["priority"]) {
 export function TodayPlannerPage() {
   const planner = usePlanner();
   const [newTask, setNewTask] = useState("");
+  const [newTaskDate, setNewTaskDate] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("P4");
+  const [newTaskListId, setNewTaskListId] = useState("");
+  const [newTaskTags, setNewTaskTags] = useState("");
+  const [quickFieldsOpen, setQuickFieldsOpen] = useState(false);
+  const [quickFields, setQuickFields] = useState({ date: true, priority: true, list: true, tags: true });
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([]);
   const [plannerOpen, setPlannerOpen] = useState(true);
   const [taskTreeOpen, setTaskTreeOpen] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -154,10 +197,30 @@ export function TodayPlannerPage() {
   const [activeFilter, setActiveFilter] = useState<TaskFilter | null>(null);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [savedFilters, setSavedFilters] = useState<SavedSmartFilter[]>([]);
+  const [smartFilterName, setSmartFilterName] = useState("");
+  const [smartFiltersLoaded, setSmartFiltersLoaded] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [clock, setClock] = useState<Date | null>(null);
   const newTaskRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleHistory(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']") || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "z" || key === "y") {
+        event.preventDefault();
+        if (key === "y" || event.shiftKey) planner.redoLastChange();
+        else planner.undoLastChange();
+      }
+    }
+    window.addEventListener("keydown", handleHistory);
+    return () => window.removeEventListener("keydown", handleHistory);
+  }, [planner]);
 
   const activeList = planner.lists.find((list) => list.id === activeListId) ?? null;
   const tasksInActiveList = activeListId
@@ -165,7 +228,9 @@ export function TodayPlannerPage() {
     : planner.filteredTasks;
   const visibleTasks = tasksInActiveList.filter((task) => {
     if (activeTag && !task.tags.includes(activeTag)) return false;
+    if (activeFilter === "favorite") return task.favorite;
     if (activeFilter === "important") return !task.done && (task.priority === "P1" || task.priority === "P2");
+    if (activeFilter === "overdue") return !task.done && task.dueDate !== null && task.dueDate < localDateKey();
     if (activeFilter === "undated") return task.dueDate === null;
     if (activeFilter === "completed") return task.done;
     return true;
@@ -179,7 +244,7 @@ export function TodayPlannerPage() {
   const tomorrowKey = addDaysKey(1);
   const nextWeekKey = addDaysKey(6);
   const viewCounts: Record<PlannerView, number> = {
-    today: planner.tasks.filter((task) => task.dueDate === todayKey && !task.done).length,
+    today: planner.tasks.filter((task) => !task.done && task.dueDate !== null && task.dueDate <= todayKey).length,
     tomorrow: planner.tasks.filter((task) => task.dueDate === tomorrowKey && !task.done).length,
     next7: planner.tasks.filter((task) => task.dueDate !== null && task.dueDate >= todayKey && task.dueDate <= nextWeekKey && !task.done).length,
     all: planner.tasks.filter((task) => !task.done).length,
@@ -216,6 +281,37 @@ export function TodayPlannerPage() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(SMART_FILTERS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) setSavedFilters(parsed.filter(isSavedSmartFilter));
+      } catch {
+        setSavedFilters([]);
+      }
+      try {
+        const fields = JSON.parse(window.localStorage.getItem(QUICK_FIELDS_KEY) || "null");
+        if (fields && typeof fields === "object") setQuickFields({
+          date: typeof fields.date === "boolean" ? fields.date : true,
+          priority: typeof fields.priority === "boolean" ? fields.priority : true,
+          list: typeof fields.list === "boolean" ? fields.list : true,
+          tags: typeof fields.tags === "boolean" ? fields.tags : true,
+        });
+      } catch { /* Keep default fields if saved preferences are unavailable. */ }
+      setSmartFiltersLoaded(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!smartFiltersLoaded) return;
+    try {
+      window.localStorage.setItem(SMART_FILTERS_KEY, JSON.stringify(savedFilters));
+      window.localStorage.setItem(QUICK_FIELDS_KEY, JSON.stringify(quickFields));
+    } catch { /* Preferences remain usable for this session if storage is unavailable. */ }
+  }, [savedFilters, quickFields, smartFiltersLoaded]);
+
+  useEffect(() => {
     function handleKeyboard(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const isTyping = target?.matches("input, textarea, select, [contenteditable='true']") ?? false;
@@ -244,6 +340,8 @@ export function TodayPlannerPage() {
   }, []);
 
   function selectView(view: PlannerView) {
+    setCalendarOpen(false);
+    setSummaryOpen(false);
     planner.setView(view);
     setActiveListId(null);
     setActiveFilter(null);
@@ -252,6 +350,8 @@ export function TodayPlannerPage() {
   }
 
   function selectList(listId: string) {
+    setCalendarOpen(false);
+    setSummaryOpen(false);
     planner.setView("all");
     setActiveListId(listId);
     setActiveFilter(null);
@@ -260,6 +360,8 @@ export function TodayPlannerPage() {
   }
 
   function selectFilter(filter: TaskFilter) {
+    setCalendarOpen(false);
+    setSummaryOpen(false);
     planner.setView("all");
     setActiveListId(null);
     setActiveTag(null);
@@ -268,6 +370,8 @@ export function TodayPlannerPage() {
   }
 
   function selectTag(tag: string) {
+    setCalendarOpen(false);
+    setSummaryOpen(false);
     planner.setView("all");
     setActiveListId(null);
     setActiveFilter(null);
@@ -275,15 +379,74 @@ export function TodayPlannerPage() {
     setMobileNavOpen(false);
   }
 
+  function saveSmartFilter(event: FormEvent) {
+    event.preventDefault();
+    const name = smartFilterName.trim();
+    if (!name) return;
+    setSavedFilters((current) => [...current, {
+      id: createEntityId("filter"),
+      name,
+      view: planner.view,
+      filter: activeFilter,
+      tag: activeTag,
+      listId: activeListId,
+      query: planner.query,
+    }]);
+    setSmartFilterName("");
+  }
+
+  function applySmartFilter(filter: SavedSmartFilter) {
+    setCalendarOpen(false);
+    setSummaryOpen(false);
+    planner.setView(filter.view);
+    planner.setQuery(filter.query);
+    setActiveFilter(filter.filter);
+    setActiveTag(filter.tag);
+    setActiveListId(filter.listId);
+    setMobileNavOpen(false);
+  }
+
   function addTask(event: FormEvent) {
     event.preventDefault();
-    const task = planner.addTask(newTask, { view: planner.view, listId: activeListId });
+    const task = planner.addTask(newTask, {
+      view: planner.view,
+      listId: newTaskListId || activeListId,
+      dueDate: newTaskDate || undefined,
+      priority: newTaskPriority,
+      tags: [...new Set(newTaskTags.split(",").map((tag) => tag.trim()).filter(Boolean))],
+    });
     if (!task) return;
     setNewTask("");
+    setNewTaskDate("");
+    setNewTaskPriority("P4");
+    setNewTaskListId("");
+    setNewTaskTags("");
+  }
+
+  function toggleBulkTask(id: string) {
+    setBulkSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  function closeBulkMode() {
+    setBulkMode(false);
+    setBulkSelectedIds([]);
+  }
+
+  function startBulkMode() {
+    planner.setSelectedId(null);
+    setBulkSelectedIds([]);
+    setBulkMode(true);
+  }
+
+  function deleteBulkTasks() {
+    if (bulkSelectedIds.length === 0) return;
+    if (!window.confirm(`Удалить выбранные задачи (${bulkSelectedIds.length})? Их можно восстановить через Undo.`)) return;
+    planner.bulkDeleteTasks(bulkSelectedIds);
+    closeBulkMode();
   }
 
   return (
-    <main className={`${styles.shell} ${plannerOpen ? "" : styles.navCollapsed}`}>
+    <main className={`${styles.shell} ${plannerOpen ? "" : styles.navCollapsed} ${planner.selected ? styles.inspectorOpen : ""}`}>
       <aside className={styles.domainRail} aria-label="Грани CUBIK">
         <div className={styles.railLogo}><CubikMark size={34} /></div>
         <nav className={styles.domainNav}>
@@ -327,7 +490,7 @@ export function TodayPlannerPage() {
                     <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{typeof count === "number" && count > 0 && <em>{count}</em>}
                   </button>
                 ))}
-                <button disabled title="Сводка — следующий этап Planner"><FileText size={17} strokeWidth={1.8} /><span>Сводка</span></button>
+                <button aria-pressed={summaryOpen} onClick={() => { setCalendarOpen(false); setSummaryOpen(true); planner.setSelectedId(null); setMobileNavOpen(false); }}><FileText size={17} strokeWidth={1.8} /><span>Сводка</span></button>
               </div>
 
               <div className={styles.treeDivider} />
@@ -355,12 +518,23 @@ export function TodayPlannerPage() {
                 <div className={styles.nestedOptions}>
                   {(Object.keys(filterLabels) as TaskFilter[]).map((filter) => {
                     const count = planner.tasks.filter((task) => {
+                      if (filter === "favorite") return task.favorite;
                       if (filter === "important") return !task.done && (task.priority === "P1" || task.priority === "P2");
+                      if (filter === "overdue") return !task.done && task.dueDate !== null && task.dueDate < localDateKey();
                       if (filter === "undated") return task.dueDate === null;
                       return task.done;
                     }).length;
                     return <button className={activeFilter === filter ? styles.contextActive : ""} key={filter} onClick={() => selectFilter(filter)}><span>{filterLabels[filter]}</span><em>{count}</em></button>;
                   })}
+                  {savedFilters.length > 0 && <span className={styles.filterSubtitle}>СОХРАНЁННЫЕ</span>}
+                  {savedFilters.map((filter) => <div className={styles.savedFilterRow} key={filter.id}>
+                    <button onClick={() => applySmartFilter(filter)} type="button"><span>{filter.name}</span></button>
+                    <button aria-label={`Удалить фильтр ${filter.name}`} onClick={() => setSavedFilters((current) => current.filter((item) => item.id !== filter.id))} type="button"><X size={13} /></button>
+                  </div>)}
+                  <form className={styles.smartFilterForm} onSubmit={saveSmartFilter}>
+                    <input aria-label="Название нового умного фильтра" placeholder="Сохранить текущий вид" value={smartFilterName} onChange={(event) => setSmartFilterName(event.target.value)} />
+                    <button aria-label="Сохранить умный фильтр" disabled={!smartFilterName.trim()} type="submit"><Plus size={14} /></button>
+                  </form>
                 </div>
               )}
               <button aria-expanded={tagsOpen} className={styles.treeSection} onClick={() => setTagsOpen((value) => !value)} type="button">
@@ -380,6 +554,7 @@ export function TodayPlannerPage() {
             </div>
           </div>
 
+          <button className={`${styles.toolButton} ${calendarOpen ? styles.toolActive : ""}`} aria-pressed={calendarOpen} onClick={() => { setCalendarOpen(true); setSummaryOpen(false); planner.setSelectedId(null); setMobileNavOpen(false); }}><CalendarDays size={18} /><span>Календарь</span></button>
           {disabledPlannerNav.map(({ label, Icon }) => (
             <button className={styles.toolButton} disabled key={label} title={`${label} — следующий этап Planner`}>
               <Icon size={19} strokeWidth={1.8} /><span>{label}</span>
@@ -394,9 +569,11 @@ export function TodayPlannerPage() {
         <header className={styles.topbar}>
           <div className={styles.pageTitle}>
             <button className={styles.mobileMenu} aria-label="Меню" onClick={() => setMobileNavOpen((value) => !value)}><Menu size={21} /></button>
-            <div><h1>{pageTitle}</h1><p>{clock ? formatDayLabel(clock) : "Сегодня"}</p></div>
+            <div><h1>{calendarOpen ? "Календарь" : summaryOpen ? "Сводка" : pageTitle}</h1><p>{clock ? formatDayLabel(clock) : "Сегодня"}</p></div>
           </div>
           <div className={styles.topActions}>
+            <button className={styles.iconButton} aria-label="Отменить действие" title={planner.undoLabel ?? "Нет действий для отмены"} disabled={!planner.canUndo} onClick={planner.undoLastChange}><Undo2 size={18} /></button>
+            <button className={styles.iconButton} aria-label="Повторить действие" title={planner.redoLabel ?? "Нет действий для повтора"} disabled={!planner.canRedo} onClick={planner.redoLastChange}><Redo2 size={18} /></button>
             <label className={controls.search}>
               <Search size={18} />
               <input ref={searchRef} aria-label="Поиск задач" placeholder="Поиск задач" value={planner.query} onChange={(event) => planner.setQuery(event.target.value)} />
@@ -410,7 +587,7 @@ export function TodayPlannerPage() {
           </div>
         </header>
 
-        <div className={styles.workspaceBody}>
+        {calendarOpen ? (clock && <PlannerCalendar tasks={planner.tasks} lists={planner.lists} now={clock} onOpen={planner.setSelectedId} onUpdate={planner.updateTask} onCreate={(title, date, start, length) => { const patch = schedulePatch(date, start, length); planner.addTask(title, { view: "all", dueDate: date, startTime: patch.startTime, endTime: patch.endTime, durationMinutes: patch.durationMinutes }); }} />) : summaryOpen ? (clock && <TaskSummary tasks={planner.tasks} lists={planner.lists} now={clock} onOpen={planner.setSelectedId} />) : <div className={styles.workspaceBody}>
           <section className={styles.mainColumn}>
             <div className={styles.greeting}>
               <span className={styles.sun}>☀</span>
@@ -440,20 +617,63 @@ export function TodayPlannerPage() {
                   {planner.query && <span className={controls.searchStatus}>Найдено: {visibleTasks.length}</span>}
                 </div>
                 <div className={controls.panelActions}>
-                  <SlidersHorizontal size={16} />
-                  <select className={controls.sortSelect} aria-label="Сортировка задач" value={planner.sort} onChange={(event) => planner.setSort(event.target.value as TaskSort)}>
-                    {(Object.keys(sortLabels) as TaskSort[]).map((value) => <option key={value} value={value}>{sortLabels[value]}</option>)}
-                  </select>
-                  <select className={controls.sortSelect} aria-label="Группировка задач" value={planner.group} onChange={(event) => planner.setGroup(event.target.value as TaskGroup)}>
-                    {(Object.keys(groupLabels) as TaskGroup[]).map((value) => <option key={value} value={value}>{groupLabels[value]}</option>)}
-                  </select>
+                  {!bulkMode && <><SlidersHorizontal size={16} />
+                    <select className={controls.sortSelect} aria-label="Сортировка задач" value={planner.sort} onChange={(event) => planner.setSort(event.target.value as TaskSort)}>
+                      {(Object.keys(sortLabels) as TaskSort[]).map((value) => <option key={value} value={value}>{sortLabels[value]}</option>)}
+                    </select>
+                    <select className={controls.sortSelect} aria-label="Группировка задач" value={planner.group} onChange={(event) => planner.setGroup(event.target.value as TaskGroup)}>
+                      {(Object.keys(groupLabels) as TaskGroup[]).map((value) => <option key={value} value={value}>{groupLabels[value]}</option>)}
+                    </select>
+                  </>}
+                  <button className={controls.selectionButton} onClick={() => bulkMode ? closeBulkMode() : startBulkMode()} type="button"><CheckSquare2 size={15} />{bulkMode ? "Готово" : "Выбрать"}</button>
                 </div>
               </header>
               {planner.persistenceError && <div role="status" style={{ margin: "0 16px 10px", padding: "9px 10px", borderRadius: 9, background: "#fff3e5", color: "#9a6117", fontSize: 11 }}>{planner.persistenceError}</div>}
+              {bulkMode && (
+                <div className={styles.bulkBar}>
+                  <label><input type="checkbox" checked={visibleTasks.length > 0 && visibleTasks.every((task) => bulkSelectedIds.includes(task.id))} onChange={(event) => setBulkSelectedIds(event.target.checked ? visibleTasks.map((task) => task.id) : [])} /><span>{bulkSelectedIds.length ? `Выбрано: ${bulkSelectedIds.length}` : "Выбрать все"}</span></label>
+                  <select aria-label="Изменить статус выбранных задач" defaultValue="" disabled={!bulkSelectedIds.length} onChange={(event) => { if (!event.target.value) return; planner.bulkUpdateTasks(bulkSelectedIds, { done: event.target.value === "done" }); event.currentTarget.value = ""; }}><option value="">Статус</option><option value="done">Выполнить</option><option value="active">Вернуть в работу</option></select>
+                  <select aria-label="Изменить приоритет выбранных задач" defaultValue="" disabled={!bulkSelectedIds.length} onChange={(event) => { if (!event.target.value) return; planner.bulkUpdateTasks(bulkSelectedIds, { priority: event.target.value as TaskPriority }); event.currentTarget.value = ""; }}><option value="">Приоритет</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option><option value="P4">P4</option></select>
+                  <select aria-label="Переместить выбранные задачи" defaultValue="" disabled={!bulkSelectedIds.length} onChange={(event) => { if (!event.target.value) return; planner.bulkUpdateTasks(bulkSelectedIds, { listId: event.target.value === "__none" ? null : event.target.value }); event.currentTarget.value = ""; }}><option value="">В список…</option><option value="__none">Без списка</option>{planner.lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}</select>
+                  <button aria-label="Удалить выбранные задачи" className={styles.bulkDelete} disabled={!bulkSelectedIds.length} onClick={deleteBulkTasks} type="button"><Trash2 size={15} /></button>
+                </div>
+              )}
               <form className={styles.quickAdd} onSubmit={addTask}>
-                <Plus size={19} /><input ref={newTaskRef} aria-label="Новая задача" placeholder={`Добавить задачу в «${pageTitle}»`} value={newTask} onChange={(event) => setNewTask(event.target.value)} /><kbd>N</kbd>
+                <div className={styles.quickAddMain}>
+                  <Plus size={19} />
+                  <input ref={newTaskRef} aria-label="Новая задача" placeholder={`Добавить задачу в «${pageTitle}»`} value={newTask} onChange={(event) => setNewTask(event.target.value)} />
+                  <button aria-expanded={quickFieldsOpen} aria-label="Настроить поля быстрого добавления" className={styles.quickSettingsButton} onClick={() => setQuickFieldsOpen((value) => !value)} type="button"><Settings2 size={16} /></button>
+                  {quickFieldsOpen && <div className={styles.quickFieldMenu}>
+                    <strong>Поля быстрого добавления</strong>
+                    {(Object.keys(quickFields) as (keyof typeof quickFields)[]).map((field) => <label key={field}><input type="checkbox" checked={quickFields[field]} onChange={(event) => setQuickFields((current) => ({ ...current, [field]: event.target.checked }))} /><span>{{ date: "Дата", priority: "Приоритет", list: "Список", tags: "Метки" }[field]}</span></label>)}
+                  </div>}
+                  <kbd>N</kbd>
+                </div>
+                <div className={styles.quickAddOptions}>
+                  {quickFields.date && <label><CalendarDays size={15} /><span className={styles.srOnly}>Дата</span><input aria-label="Дата новой задачи" type="date" value={newTaskDate} onChange={(event) => setNewTaskDate(event.target.value)} /></label>}
+                  {quickFields.priority && <label><Star size={15} /><span className={styles.srOnly}>Приоритет</span><select aria-label="Приоритет новой задачи" value={newTaskPriority} onChange={(event) => setNewTaskPriority(event.target.value as TaskPriority)}><option value="P1">P1 · Критично</option><option value="P2">P2 · Важно</option><option value="P3">P3 · Низкий</option><option value="P4">Без приоритета</option></select></label>}
+                  {quickFields.list && <label><ListTodo size={15} /><span className={styles.srOnly}>Список</span><select aria-label="Список новой задачи" value={newTaskListId} onChange={(event) => setNewTaskListId(event.target.value)}><option value="">{activeList ? activeList.name : "Без списка"}</option>{planner.lists.filter((list) => list.id !== activeListId).map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}</select></label>}
+                  {quickFields.tags && <label><Tags size={15} /><span className={styles.srOnly}>Метки</span><input aria-label="Метки новой задачи" placeholder="Метки" value={newTaskTags} onChange={(event) => setNewTaskTags(event.target.value)} /></label>}
+                  <button className={styles.quickAddSubmit} disabled={!newTask.trim()} type="submit">Добавить</button>
+                </div>
               </form>
-              <TaskList tasks={visibleTasks} lists={planner.lists} selectedId={planner.selectedId} group={planner.group} onSelect={planner.setSelectedId} onToggle={planner.toggleTask} />
+              <TaskList
+                tasks={visibleTasks}
+                lists={planner.lists}
+                selectedId={planner.selectedId}
+                group={planner.group}
+                manualReorder={planner.sort === "manual"}
+                onSelect={planner.setSelectedId}
+                onToggle={planner.toggleTask}
+                onToggleFavorite={planner.toggleFavorite}
+                onReorder={planner.reorderTask}
+                bulkMode={bulkMode}
+                bulkSelectedIds={bulkSelectedIds}
+                onBulkSelect={toggleBulkTask}
+                onDuplicate={planner.duplicateTask}
+                onSchedule={(id, dueDate, inbox) => planner.updateTask(id, { dueDate, inbox })}
+                onDelete={planner.deleteTask}
+              />
               <button className={styles.laterButton} onClick={() => selectView("all")}><ChevronDown size={17} /><span>Все задачи</span><em>{planner.tasks.length}</em></button>
             </section>
           </section>
@@ -484,7 +704,7 @@ export function TodayPlannerPage() {
             </div>
             <footer><span>Запланировано</span><strong>{formatDuration(planner.summary.totalMinutes)}</strong></footer>
           </aside>
-        </div>
+        </div>}
       </section>
 
       {planner.selected && (
@@ -498,9 +718,15 @@ export function TodayPlannerPage() {
           onDelete={planner.deleteTask}
           onToggleSubtask={planner.toggleSubtask}
           onAddSubtask={planner.addSubtask}
+          onUpdateSubtask={planner.updateSubtask}
+          onDeleteSubtask={planner.deleteSubtask}
+          onReorderSubtask={planner.reorderSubtask}
           onAddAttachments={planner.addAttachments}
+          onDeleteAttachment={planner.deleteAttachment}
         />
       )}
+
+      {planner.undoAction && <div className={styles.undoToast} role="status"><span>{planner.undoAction}</span><button onClick={planner.undoLastChange} type="button"><Undo2 size={15} />Отменить</button></div>}
 
       {listManagerOpen && (
         <ListManager

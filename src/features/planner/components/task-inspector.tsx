@@ -2,6 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
   Check,
   Paperclip,
@@ -26,7 +28,11 @@ type TaskInspectorProps = {
   onDelete: (id: string) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onAddSubtask: (taskId: string, title: string) => void;
+  onUpdateSubtask: (taskId: string, subtaskId: string, title: string) => void;
+  onDeleteSubtask: (taskId: string, subtaskId: string) => void;
+  onReorderSubtask: (taskId: string, subtaskId: string, direction: -1 | 1) => void;
   onAddAttachments: (taskId: string, names: string[]) => void;
+  onDeleteAttachment: (taskId: string, attachmentId: string) => void;
 };
 
 type Draft = {
@@ -68,7 +74,7 @@ function parseTags(value: string) {
 }
 
 export function TaskInspector(props: TaskInspectorProps) {
-  return <TaskInspectorEditor key={props.task.id} {...props} />;
+  return <TaskInspectorEditor key={`${props.task.id}:${props.task.updatedAt}`} {...props} />;
 }
 
 function TaskInspectorEditor({
@@ -81,7 +87,11 @@ function TaskInspectorEditor({
   onDelete,
   onToggleSubtask,
   onAddSubtask,
+  onUpdateSubtask,
+  onDeleteSubtask,
+  onReorderSubtask,
   onAddAttachments,
+  onDeleteAttachment,
 }: TaskInspectorProps) {
   const [draft, setDraft] = useState<Draft>(() => createDraft(task));
   const [subtaskTitle, setSubtaskTitle] = useState("");
@@ -123,7 +133,7 @@ function TaskInspectorEditor({
   }
 
   function removeTask() {
-    if (window.confirm("Удалить эту задачу? Это действие нельзя отменить в локальном прототипе.")) {
+    if (window.confirm("Удалить эту задачу? После удаления её можно восстановить кнопкой Undo.")) {
       onDelete(task.id);
     }
   }
@@ -170,7 +180,7 @@ function TaskInspectorEditor({
             <label>
               <span>Приоритет</span>
               <select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value as TaskPriority }))}>
-                <option value="P1">P1 — высокий</option><option value="P2">P2 — средний</option><option value="P3">P3 — обычный</option>
+                <option value="P1">P1 — критичный</option><option value="P2">P2 — важный</option><option value="P3">P3 — низкий</option><option value="P4">P4 — без приоритета</option>
               </select>
             </label>
             <label>
@@ -218,7 +228,23 @@ function TaskInspectorEditor({
         <section className={editor.subtaskSection}>
           <div className={editor.sectionHeader}><strong>Подзадачи</strong><span>{completedSubtasks}/{task.subtasks.length}</span></div>
           <div className={editor.subtaskList}>
-            {task.subtasks.map((subtask) => <label className={editor.subtask} key={subtask.id}><input type="checkbox" checked={subtask.done} onChange={() => onToggleSubtask(task.id, subtask.id)} /><span className={subtask.done ? editor.subtaskDone : ""}>{subtask.title}</span></label>)}
+            {task.subtasks.map((subtask, index) => (
+              <div className={editor.subtask} key={subtask.id}>
+                <input aria-label={`Завершить подзадачу ${subtask.title}`} type="checkbox" checked={subtask.done} onChange={() => onToggleSubtask(task.id, subtask.id)} />
+                <input
+                  aria-label={`Название подзадачи ${subtask.title}`}
+                  className={subtask.done ? editor.subtaskDone : ""}
+                  defaultValue={subtask.title}
+                  onBlur={(event) => onUpdateSubtask(task.id, subtask.id, event.currentTarget.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                />
+                <div className={editor.subtaskActions}>
+                  <button aria-label={`Поднять подзадачу ${subtask.title}`} disabled={index === 0} onClick={() => onReorderSubtask(task.id, subtask.id, -1)} type="button"><ArrowUp size={13} /></button>
+                  <button aria-label={`Опустить подзадачу ${subtask.title}`} disabled={index === task.subtasks.length - 1} onClick={() => onReorderSubtask(task.id, subtask.id, 1)} type="button"><ArrowDown size={13} /></button>
+                  <button aria-label={`Удалить подзадачу ${subtask.title}`} onClick={() => onDeleteSubtask(task.id, subtask.id)} type="button"><Trash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
           </div>
           <form className={editor.subtaskForm} onSubmit={addSubtask}><input aria-label="Новая подзадача" placeholder="Добавить подзадачу" value={subtaskTitle} onChange={(event) => setSubtaskTitle(event.target.value)} /><button type="submit" aria-label="Добавить подзадачу"><Plus size={15} /></button></form>
         </section>
@@ -229,7 +255,7 @@ function TaskInspectorEditor({
             <Paperclip size={15} />Добавить файлы
             <input multiple type="file" onChange={(event) => { const names = Array.from(event.currentTarget.files ?? []).map((file) => file.name); onAddAttachments(task.id, names); event.currentTarget.value = ""; }} />
           </label>
-          {task.attachments.length > 0 && <div className={editor.attachmentList}>{task.attachments.map((attachment) => <span key={attachment.id}>{attachment.name}</span>)}</div>}
+          {task.attachments.length > 0 && <div className={editor.attachmentList}>{task.attachments.map((attachment) => <span key={attachment.id}>{attachment.name}<button aria-label={`Удалить вложение ${attachment.name}`} onClick={() => onDeleteAttachment(task.id, attachment.id)} type="button"><X size={12} /></button></span>)}</div>}
           <p className={editor.note}>В локальном MVP сохраняются названия вложений. Сами файлы будут храниться в object storage после подключения backend.</p>
         </section>
 

@@ -1,7 +1,7 @@
-export type TaskPriority = "P1" | "P2" | "P3";
+export type TaskPriority = "P1" | "P2" | "P3" | "P4";
 export type TaskRecurrence = "none" | "daily" | "weekly" | "monthly";
 export type PlannerView = "today" | "tomorrow" | "next7" | "inbox" | "all";
-export type TaskSort = "time" | "priority" | "created";
+export type TaskSort = "manual" | "time" | "priority" | "created";
 export type TaskGroup = "none" | "list" | "priority" | "status";
 
 export type Subtask = {
@@ -32,7 +32,9 @@ export type Task = {
   attachments: TaskAttachment[];
   habit: boolean;
   inbox: boolean;
+  favorite: boolean;
   done: boolean;
+  order: number;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -120,7 +122,9 @@ export function createInitialTasks(date = new Date()): Task[] {
       attachments: [],
       habit: false,
       inbox: false,
+      favorite: true,
       done: false,
+      order: 0,
       createdAt: now,
       updatedAt: now,
       completedAt: null,
@@ -142,7 +146,9 @@ export function createInitialTasks(date = new Date()): Task[] {
       attachments: [],
       habit: false,
       inbox: false,
+      favorite: false,
       done: false,
+      order: 1,
       createdAt: now,
       updatedAt: now,
       completedAt: null,
@@ -164,7 +170,9 @@ export function createInitialTasks(date = new Date()): Task[] {
       attachments: [],
       habit: true,
       inbox: false,
+      favorite: false,
       done: false,
+      order: 2,
       createdAt: now,
       updatedAt: now,
       completedAt: null,

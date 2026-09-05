@@ -10,12 +10,15 @@ import {
   Subtask,
 } from "./model";
 
-const STORAGE_KEY = "cubik.planner.v2";
+const STORAGE_KEY = "cubik.planner.v3";
+const LEGACY_PLANNER_KEY = "cubik.planner.v2";
 const LEGACY_TASKS_KEY = "cubik.planner.tasks.v1";
 
 type StoredPlanner = PlannerState & {
-  version: 2;
+  version: 3;
 };
+
+type LegacyPlannerV2 = PlannerState & { version: 2 };
 
 type LegacyStoredPlanner = {
   version: 1;
@@ -31,7 +34,7 @@ function nullableString(value: unknown) {
 }
 
 function normalizePriority(value: unknown): TaskPriority {
-  return value === "P1" || value === "P2" || value === "P3" ? value : "P3";
+  return value === "P1" || value === "P2" || value === "P3" || value === "P4" ? value : "P4";
 }
 
 function normalizeRecurrence(value: unknown): TaskRecurrence {
@@ -54,7 +57,7 @@ function normalizeAttachments(value: unknown): TaskAttachment[] {
   });
 }
 
-function normalizeTask(value: unknown): Task | null {
+function normalizeTask(value: unknown, fallbackOrder = 0): Task | null {
   if (!isRecord(value) || typeof value.id !== "string" || typeof value.title !== "string") return null;
 
   const now = new Date().toISOString();
@@ -79,7 +82,9 @@ function normalizeTask(value: unknown): Task | null {
     attachments: normalizeAttachments(value.attachments),
     habit: value.habit === true,
     inbox: value.inbox === true,
+    favorite: value.favorite === true,
     done: value.done === true,
+    order: typeof value.order === "number" && Number.isFinite(value.order) ? value.order : fallbackOrder,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : now,
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : now,
     completedAt: nullableString(value.completedAt),
@@ -99,8 +104,8 @@ function normalizeList(value: unknown): TaskList | null {
 
 function normalizeTasks(value: unknown) {
   if (!Array.isArray(value)) return { tasks: [] as Task[], invalidCount: 0 };
-  const tasks = value.flatMap((task) => {
-    const normalized = normalizeTask(task);
+  const tasks = value.flatMap((task, index) => {
+    const normalized = normalizeTask(task, index);
     return normalized ? [normalized] : [];
   });
   return { tasks, invalidCount: value.length - tasks.length };
@@ -116,8 +121,31 @@ function normalizeLists(value: unknown) {
 }
 
 function saveRawPlanner(state: PlannerState) {
-  const payload: StoredPlanner = { version: 2, ...state };
+  const payload: StoredPlanner = { version: 3, ...state };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+}
+
+function migratePlannerV2(): { state: PlannerState; warning: string | null } | null {
+  const raw = window.localStorage.getItem(LEGACY_PLANNER_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<LegacyPlannerV2>;
+    if (parsed.version !== 2 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.lists)) return null;
+    const { tasks, invalidCount: invalidTasks } = normalizeTasks(parsed.tasks);
+    const { lists, invalidCount: invalidLists } = normalizeLists(parsed.lists);
+    const state = { tasks, lists };
+    saveRawPlanner(state);
+    const issues = invalidTasks + invalidLists;
+    return {
+      state,
+      warning: issues > 0
+        ? `Planner обновлён до версии 3. Пропущено повреждённых записей: ${issues}.`
+        : "Planner обновлён: добавлены избранное и ручной порядок задач.",
+    };
+  } catch {
+    return null;
+  }
 }
 
 function migrateLegacy(): { state: PlannerState; warning: string | null } | null {
@@ -151,13 +179,15 @@ export function loadPlanner(): { state: PlannerState; error: string | null } {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
+      const migratedV2 = migratePlannerV2();
+      if (migratedV2) return { state: migratedV2.state, error: migratedV2.warning };
       const migrated = migrateLegacy();
       if (migrated) return { state: migrated.state, error: migrated.warning };
       return { state: fallback(), error: null };
     }
 
     const parsed = JSON.parse(raw) as Partial<StoredPlanner>;
-    if (parsed.version !== 2 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.lists)) {
+    if (parsed.version !== 3 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.lists)) {
       return { state: fallback(), error: "Формат локальных данных Planner повреждён. Загружены безопасные демонстрационные данные." };
     }
 
