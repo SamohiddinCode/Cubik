@@ -13,6 +13,8 @@ import {
   TaskPriority,
   TaskSort,
   TaskGroup,
+  TaskRecurrence,
+  OccurrenceOverride,
 } from "./model";
 import { loadPlanner, savePlanner } from "./storage";
 
@@ -25,6 +27,7 @@ type CreateTaskOptions = {
   startTime?: string | null;
   durationMinutes?: number | null;
   endTime?: string | null;
+  recurrence?: TaskRecurrence;
 };
 
 type UndoState = {
@@ -167,7 +170,7 @@ export function usePlanner() {
       listId: options.listId ?? null,
       tags: options.tags ?? [],
       goalId: null,
-      recurrence: "none",
+      recurrence: options.recurrence ?? "none",
       subtasks: [],
       attachments: [],
       habit: false,
@@ -190,6 +193,12 @@ export function usePlanner() {
       ? { ...task, ...patch, id: task.id, updatedAt: new Date().toISOString() }
       : task);
     commitTasks(nextTasks, "Задача изменена");
+  }
+
+  function updateOccurrence(id: string, date: string, patch: OccurrenceOverride) {
+    const task = tasks.find((item) => item.id === id);
+    if (!task) return;
+    updateTask(id, { occurrenceOverrides: { ...task.occurrenceOverrides, [date]: { ...task.occurrenceOverrides?.[date], ...patch } } });
   }
 
   function toggleTask(id: string) {
@@ -453,6 +462,7 @@ export function usePlanner() {
     redoLabel: future.at(-1)?.label,
     updateList,
     updateTask,
+    updateOccurrence,
     updateSubtask,
     view,
   };

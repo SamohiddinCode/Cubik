@@ -38,7 +38,10 @@ export type Task = {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  occurrenceOverrides?: Record<string, OccurrenceOverride>;
 };
+
+export type OccurrenceOverride = Partial<Pick<Task, "title" | "dueDate" | "startTime" | "endTime" | "durationMinutes" | "done" | "completedAt">> & { cancelled?: boolean };
 
 export type TaskList = {
   id: string;

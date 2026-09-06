@@ -8,7 +8,10 @@ import {
   TaskPriority,
   TaskRecurrence,
   Subtask,
+  OccurrenceOverride,
 } from "./model";
+import { isDateKey } from "./calendar-recurrence";
+import { minutes } from "./calendar-model";
 
 const STORAGE_KEY = "cubik.planner.v3";
 const LEGACY_PLANNER_KEY = "cubik.planner.v2";
@@ -88,7 +91,28 @@ function normalizeTask(value: unknown, fallbackOrder = 0): Task | null {
     createdAt: typeof value.createdAt === "string" ? value.createdAt : now,
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : now,
     completedAt: nullableString(value.completedAt),
+    occurrenceOverrides: normalizeOverrides(value.occurrenceOverrides),
   };
+}
+
+function normalizeOverrides(value: unknown): Record<string, OccurrenceOverride> {
+  if (!isRecord(value)) return {};
+  const result: Record<string, OccurrenceOverride> = {};
+  for (const [date, raw] of Object.entries(value)) {
+    if (!isDateKey(date) || !isRecord(raw)) continue;
+    const item: OccurrenceOverride = {};
+    if (typeof raw.title === "string" && raw.title.trim()) item.title = raw.title;
+    if (isDateKey(raw.dueDate)) item.dueDate = raw.dueDate;
+    for (const key of ["startTime", "endTime"] as const) {
+      if (raw[key] === null || (typeof raw[key] === "string" && minutes(raw[key]) !== null)) item[key] = raw[key];
+    }
+    if (raw.durationMinutes === null || (typeof raw.durationMinutes === "number" && Number.isFinite(raw.durationMinutes) && raw.durationMinutes > 0 && raw.durationMinutes <= 1440)) item.durationMinutes = raw.durationMinutes;
+    if (typeof raw.done === "boolean") item.done = raw.done;
+    if (raw.completedAt === null || (typeof raw.completedAt === "string" && Number.isFinite(Date.parse(raw.completedAt)))) item.completedAt = raw.completedAt;
+    if (typeof raw.cancelled === "boolean") item.cancelled = raw.cancelled;
+    result[date] = item;
+  }
+  return result;
 }
 
 function normalizeList(value: unknown): TaskList | null {

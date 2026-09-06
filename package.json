@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:calendar": "node scripts/check-calendar.mjs",
+    "test:eisenhower": "node scripts/check-eisenhower.mjs",
+    "test:focus": "node scripts/check-focus.mjs"
   },
   "dependencies": {
     "lucide-react": "1.40.0",

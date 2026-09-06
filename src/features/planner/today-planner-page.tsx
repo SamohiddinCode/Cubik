@@ -49,6 +49,8 @@ import { TaskInspector } from "./components/task-inspector";
 import { ListManager } from "./components/list-manager";
 import { TaskSummary } from "./components/task-summary";
 import { PlannerCalendar } from "./components/planner-calendar";
+import { EisenhowerMatrix } from "./components/eisenhower-matrix";
+import { FocusTimer } from "./components/focus-timer";
 import { schedulePatch } from "./calendar-model";
 
 const domains = [
@@ -61,8 +63,6 @@ const domains = [
 ];
 
 const disabledPlannerNav = [
-  { label: "Матрица Эйзенхауэра", Icon: Grid2X2 },
-  { label: "Фокус", Icon: Focus },
   { label: "Привычки", Icon: Repeat2 },
   { label: "Статистика", Icon: BarChart3 },
 ];
@@ -203,6 +203,8 @@ export function TodayPlannerPage() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [matrixOpen, setMatrixOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
   const [clock, setClock] = useState<Date | null>(null);
   const newTaskRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -341,6 +343,8 @@ export function TodayPlannerPage() {
 
   function selectView(view: PlannerView) {
     setCalendarOpen(false);
+    setMatrixOpen(false);
+    setFocusOpen(false);
     setSummaryOpen(false);
     planner.setView(view);
     setActiveListId(null);
@@ -351,6 +355,8 @@ export function TodayPlannerPage() {
 
   function selectList(listId: string) {
     setCalendarOpen(false);
+    setMatrixOpen(false);
+    setFocusOpen(false);
     setSummaryOpen(false);
     planner.setView("all");
     setActiveListId(listId);
@@ -361,6 +367,8 @@ export function TodayPlannerPage() {
 
   function selectFilter(filter: TaskFilter) {
     setCalendarOpen(false);
+    setMatrixOpen(false);
+    setFocusOpen(false);
     setSummaryOpen(false);
     planner.setView("all");
     setActiveListId(null);
@@ -371,6 +379,8 @@ export function TodayPlannerPage() {
 
   function selectTag(tag: string) {
     setCalendarOpen(false);
+    setMatrixOpen(false);
+    setFocusOpen(false);
     setSummaryOpen(false);
     planner.setView("all");
     setActiveListId(null);
@@ -397,6 +407,8 @@ export function TodayPlannerPage() {
 
   function applySmartFilter(filter: SavedSmartFilter) {
     setCalendarOpen(false);
+    setMatrixOpen(false);
+    setFocusOpen(false);
     setSummaryOpen(false);
     planner.setView(filter.view);
     planner.setQuery(filter.query);
@@ -490,7 +502,7 @@ export function TodayPlannerPage() {
                     <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{typeof count === "number" && count > 0 && <em>{count}</em>}
                   </button>
                 ))}
-                <button aria-pressed={summaryOpen} onClick={() => { setCalendarOpen(false); setSummaryOpen(true); planner.setSelectedId(null); setMobileNavOpen(false); }}><FileText size={17} strokeWidth={1.8} /><span>Сводка</span></button>
+                <button aria-pressed={summaryOpen} onClick={() => { setCalendarOpen(false); setMatrixOpen(false); setFocusOpen(false); setSummaryOpen(true); planner.setSelectedId(null); setMobileNavOpen(false); }}><FileText size={17} strokeWidth={1.8} /><span>Сводка</span></button>
               </div>
 
               <div className={styles.treeDivider} />
@@ -554,7 +566,9 @@ export function TodayPlannerPage() {
             </div>
           </div>
 
-          <button className={`${styles.toolButton} ${calendarOpen ? styles.toolActive : ""}`} aria-pressed={calendarOpen} onClick={() => { setCalendarOpen(true); setSummaryOpen(false); planner.setSelectedId(null); setMobileNavOpen(false); }}><CalendarDays size={18} /><span>Календарь</span></button>
+          <button className={`${styles.toolButton} ${calendarOpen ? styles.toolActive : ""}`} aria-pressed={calendarOpen} onClick={() => { setCalendarOpen(true); setMatrixOpen(false); setFocusOpen(false); setSummaryOpen(false); planner.setSelectedId(null); setMobileNavOpen(false); }}><CalendarDays size={18} /><span>Календарь</span></button>
+          <button className={`${styles.toolButton} ${matrixOpen ? styles.toolActive : ""}`} aria-pressed={matrixOpen} onClick={() => { setCalendarOpen(false); setMatrixOpen(true); setFocusOpen(false); setSummaryOpen(false); planner.setSelectedId(null); setMobileNavOpen(false); }}><Grid2X2 size={18} /><span>Матрица Эйзенхауэра</span></button>
+          <button className={`${styles.toolButton} ${focusOpen ? styles.toolActive : ""}`} aria-pressed={focusOpen} onClick={() => { setCalendarOpen(false); setMatrixOpen(false); setFocusOpen(true); setSummaryOpen(false); planner.setSelectedId(null); setMobileNavOpen(false); }}><Focus size={18} /><span>Фокус</span></button>
           {disabledPlannerNav.map(({ label, Icon }) => (
             <button className={styles.toolButton} disabled key={label} title={`${label} — следующий этап Planner`}>
               <Icon size={19} strokeWidth={1.8} /><span>{label}</span>
@@ -569,7 +583,7 @@ export function TodayPlannerPage() {
         <header className={styles.topbar}>
           <div className={styles.pageTitle}>
             <button className={styles.mobileMenu} aria-label="Меню" onClick={() => setMobileNavOpen((value) => !value)}><Menu size={21} /></button>
-            <div><h1>{calendarOpen ? "Календарь" : summaryOpen ? "Сводка" : pageTitle}</h1><p>{clock ? formatDayLabel(clock) : "Сегодня"}</p></div>
+            <div><h1>{calendarOpen ? "Календарь" : matrixOpen ? "Матрица Эйзенхауэра" : focusOpen ? "Фокус" : summaryOpen ? "Сводка" : pageTitle}</h1><p>{clock ? formatDayLabel(clock) : "Сегодня"}</p></div>
           </div>
           <div className={styles.topActions}>
             <button className={styles.iconButton} aria-label="Отменить действие" title={planner.undoLabel ?? "Нет действий для отмены"} disabled={!planner.canUndo} onClick={planner.undoLastChange}><Undo2 size={18} /></button>
@@ -587,7 +601,7 @@ export function TodayPlannerPage() {
           </div>
         </header>
 
-        {calendarOpen ? (clock && <PlannerCalendar tasks={planner.tasks} lists={planner.lists} now={clock} onOpen={planner.setSelectedId} onUpdate={planner.updateTask} onCreate={(title, date, start, length) => { const patch = schedulePatch(date, start, length); planner.addTask(title, { view: "all", dueDate: date, startTime: patch.startTime, endTime: patch.endTime, durationMinutes: patch.durationMinutes }); }} />) : summaryOpen ? (clock && <TaskSummary tasks={planner.tasks} lists={planner.lists} now={clock} onOpen={planner.setSelectedId} />) : <div className={styles.workspaceBody}>
+        {calendarOpen ? (clock && <PlannerCalendar tasks={planner.tasks} lists={planner.lists} now={clock} query={planner.query} onUpdateOccurrence={planner.updateOccurrence} onOpen={planner.setSelectedId} onUpdate={planner.updateTask} onCreate={(title, date, start, length, recurrence) => { const patch = schedulePatch(date, start, length); planner.addTask(title, { view: "all", dueDate: date, startTime: patch.startTime, endTime: patch.endTime, durationMinutes: patch.durationMinutes, recurrence }); }} />) : matrixOpen ? (clock && <EisenhowerMatrix tasks={planner.tasks} lists={planner.lists} query={planner.query} now={clock} selectedId={planner.selectedId} onCreate={(title, priority) => planner.addTask(title, { view: "all", priority })} onOpen={planner.setSelectedId} onToggle={planner.toggleTask} onUpdate={planner.updateTask} />) : focusOpen ? (clock && <FocusTimer tasks={planner.tasks} lists={planner.lists} query={planner.query} now={clock} onOpen={planner.setSelectedId} onToggle={planner.toggleTask} />) : summaryOpen ? (clock && <TaskSummary tasks={planner.tasks} lists={planner.lists} now={clock} onOpen={planner.setSelectedId} />) : <div className={styles.workspaceBody}>
           <section className={styles.mainColumn}>
             <div className={styles.greeting}>
               <span className={styles.sun}>☀</span>

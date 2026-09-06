@@ -1,4 +1,4 @@
-.calendar { padding: 22px; min-width: 0; color: #26374e; }
+.calendar { padding: 22px; min-width: 0; color: #26374e; container-type: inline-size; container-name: calendar; }
 .calendar button, .calendar input, .calendar select { font: inherit; }
 .calendar button { cursor: pointer; }
 .toolbar, .navigation, .modes, .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -12,7 +12,9 @@
 .backlog { padding: 12px; background: #f0f4f8; border-radius: 12px; min-width: 0; }
 .backlog h3 { font-size: 14px; margin: 0; }
 .backlog p, .hint { font-size: 12px; line-height: 1.5; color: #6b7b91; }
-.board { background: white; border: 1px solid #dce4ee; border-radius: 12px; overflow: hidden; min-width: 0; }
+.board { background: white; border: 1px solid #dce4ee; border-radius: 12px; overflow: auto; min-width: 0; }
+.board[data-mode="week"] > * { min-width: 680px; }
+.board[data-mode="month"] > * { min-width: 560px; }
 .dayHeaders, .allDay { display: grid; border-bottom: 1px solid #e4eaf1; }
 .dayHeaders button { padding: 12px 1px; background: white; border: 0; font-size: 12px; color: inherit; }
 .today { background: #e5edf5 !important; color: #305b83 !important; border-radius: 6px; }
@@ -50,6 +52,11 @@
 .dialog h3 { margin: 0; }
 .dialog label { display: grid; gap: 7px; font-size: 13px; }
 .dialog input { width: 100%; min-width: 0; border: 1px solid #cfdbe8; padding: 10px; border-radius: 8px; }
+.dialog select { width: 100%; border: 1px solid #cfdbe8; border-radius: 8px; padding: 10px; background: white; color: inherit; }
+.dialog p { font-size: 13px; color: #6b7b91; margin: 0; }
+.occurrenceActions { display: grid; gap: 8px; border-top: 1px solid #dfe6ef; padding-top: 12px; }
+.occurrenceActions button { justify-content: center; }
+@container calendar (max-width: 800px) { .body { grid-template-columns: 1fr; } .backlog { max-height: 130px; overflow: auto; } }
 .dialog > button { justify-content: center; background: #e5edf5; }
 @media (max-width: 1200px) { .body { grid-template-columns: 1fr; } .backlog { max-height: 150px; overflow: auto; } }
 @media (max-width: 600px) { .calendar { padding: 12px; } .navigation input { max-width: 140px; } .toolbar { font-size: 12px; } .monthDay { min-height: 80px; padding: 2px; } .weekday { padding: 8px 0; } .eventContent strong { font-size: 10px; } .eventContent span { display: none; } }
