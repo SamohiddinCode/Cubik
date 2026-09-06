@@ -28,6 +28,7 @@ type CreateTaskOptions = {
   durationMinutes?: number | null;
   endTime?: string | null;
   recurrence?: TaskRecurrence;
+  habit?: boolean;
 };
 
 type UndoState = {
@@ -173,7 +174,7 @@ export function usePlanner() {
       recurrence: options.recurrence ?? "none",
       subtasks: [],
       attachments: [],
-      habit: false,
+      habit: options.habit ?? false,
       inbox: activeView === "inbox" && dueDate === null,
       favorite: false,
       done: false,

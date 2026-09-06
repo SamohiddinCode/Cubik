@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test:calendar": "node scripts/check-calendar.mjs",
     "test:eisenhower": "node scripts/check-eisenhower.mjs",
-    "test:focus": "node scripts/check-focus.mjs"
+    "test:focus": "node scripts/check-focus.mjs",
+    "test:habits": "node scripts/check-habits.mjs"
   },
   "dependencies": {
     "lucide-react": "1.40.0",
